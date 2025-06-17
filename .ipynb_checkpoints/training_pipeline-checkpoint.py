@@ -25,7 +25,7 @@ import os
 
 
 @component(
-    base_image="asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow_pipelines/demo_model"
+    base_image="asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow-pipelines/demo_model"
 )
 def data_ingestion(input_data_path: str, input_data: Output[Dataset],):
     import pandas as pd
@@ -40,7 +40,7 @@ def data_ingestion(input_data_path: str, input_data: Output[Dataset],):
 
 
 @component(
-    base_image="asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow_pipelines/demo_model"
+    base_image="asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow-pipelines/demo_model"
 )
 def preprocessing(train_df: Input[Dataset], input_data_preprocessed: Output[Dataset]):
     import pandas as pd
@@ -57,7 +57,7 @@ def preprocessing(train_df: Input[Dataset], input_data_preprocessed: Output[Data
 
 
 @component(
-    base_image="asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow_pipelines/demo_model"
+    base_image="asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow-pipelines/demo_model"
 )
 def train_test_data_split(
     dataset_in: Input[Dataset],
@@ -85,7 +85,7 @@ def train_test_data_split(
 
 
 @component(
-     base_image="asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow_pipelines/demo_model"
+     base_image="asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow-pipelines/demo_model"
 )
 def hyperparameters_training(
     dataset_train: Input[Dataset],
@@ -158,7 +158,7 @@ def hyperparameters_training(
 
 
 @component(
-    base_image="asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow_pipelines/demo_model"
+    base_image="asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow-pipelines/demo_model"
 )
 def deploy_model(
     project: str,
@@ -205,7 +205,7 @@ def deploy_model(
 
 
 @component(
-    base_image="asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow_pipelines/demo_model"
+    base_image="asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow-pipelines/demo_model"
 )
 def create_endpoint(
     project: str,
