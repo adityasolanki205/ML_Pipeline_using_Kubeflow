@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[ ]:
+# In[1]:
 
 
 import yaml
@@ -21,11 +21,11 @@ import google.cloud.aiplatform as aiplatform
 import os
 
 
-# In[ ]:
+# In[2]:
 
 
 @component(
-    base_image="asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow-pipelines/demo_model"
+    base_image="asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow_pipelines/demo_model"
 )
 def data_ingestion(input_data_path: str, input_data: Output[Dataset],):
     import pandas as pd
@@ -36,11 +36,11 @@ def data_ingestion(input_data_path: str, input_data: Output[Dataset],):
     df.to_csv(input_data.path, index=False)
 
 
-# In[ ]:
+# In[3]:
 
 
 @component(
-    base_image="asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow-pipelines/demo_model"
+    base_image="asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow_pipelines/demo_model"
 )
 def preprocessing(train_df: Input[Dataset], input_data_preprocessed: Output[Dataset]):
     import pandas as pd
@@ -53,11 +53,11 @@ def preprocessing(train_df: Input[Dataset], input_data_preprocessed: Output[Data
     df.to_csv(input_data_preprocessed.path, index=False)
 
 
-# In[ ]:
+# In[4]:
 
 
 @component(
-    base_image="asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow-pipelines/demo_model"
+    base_image="asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow_pipelines/demo_model"
 )
 def train_test_data_split(
     dataset_in: Input[Dataset],
@@ -81,11 +81,11 @@ def train_test_data_split(
     X_test.to_csv(dataset_test.path, index=False)
 
 
-# In[ ]:
+# In[5]:
 
 
 @component(
-     base_image="asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow-pipelines/demo_model"
+     base_image="asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow_pipelines/demo_model"
 )
 def hyperparameters_training(
     dataset_train: Input[Dataset],
@@ -154,11 +154,11 @@ def hyperparameters_training(
         json.dump(best_params, f)
 
 
-# In[ ]:
+# In[6]:
 
 
 @component(
-    base_image="asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow-pipelines/demo_model"
+    base_image="asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow_pipelines/demo_model"
 )
 def deploy_model(
     project: str,
@@ -201,11 +201,11 @@ def deploy_model(
         
 
 
-# In[ ]:
+# In[7]:
 
 
 @component(
-    base_image="asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow-pipelines/demo_model"
+    base_image="asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow_pipelines/demo_model"
 )
 def create_endpoint(
     project: str,
@@ -240,14 +240,14 @@ def create_endpoint(
         
 
 
-# In[ ]:
+# In[8]:
 
 
-@dsl.pipeline(name="Training Pipeline", pipeline_root="gs://my-data-classification/pipeline_root_demo")
+@dsl.pipeline(name="Training Pipeline", pipeline_root="gs://demo_bucket_kfl/pipeline_root_demo")
 def pipeline(
-    input_data_path: str = "gs://my-data-classification/wines.csv",
-    project_id: str = "gcp-project-raj33342",
-    region: str = "europe-west1",
+    input_data_path: str = "gs://demo_bucket_kfl/clean_customer_data.csv",
+    project_id: str = "solar-dialect-264808",
+    region: str = "asia-south1",
     model_name: str = "demo_model",
     target: str = "type",
     max_evals: int = 30,
@@ -291,4 +291,10 @@ def pipeline(
 
 if __name__ == "__main__":
     compiler.Compiler().compile(pipeline_func=pipeline, package_path="training_pipeline.json")
+
+
+# In[ ]:
+
+
+
 

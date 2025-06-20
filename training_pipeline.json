@@ -1,0 +1,571 @@
+{
+  "components": {
+    "comp-create-endpoint": {
+      "executorLabel": "exec-create-endpoint",
+      "inputDefinitions": {
+        "artifacts": {
+          "ml_model": {
+            "artifactType": {
+              "schemaTitle": "system.Model",
+              "schemaVersion": "0.0.1"
+            }
+          }
+        },
+        "parameters": {
+          "model_name": {
+            "parameterType": "STRING"
+          },
+          "project": {
+            "parameterType": "STRING"
+          },
+          "region": {
+            "parameterType": "STRING"
+          },
+          "serving_container_image_uri": {
+            "parameterType": "STRING"
+          }
+        }
+      }
+    },
+    "comp-data-ingestion": {
+      "executorLabel": "exec-data-ingestion",
+      "inputDefinitions": {
+        "parameters": {
+          "input_data_path": {
+            "parameterType": "STRING"
+          }
+        }
+      },
+      "outputDefinitions": {
+        "artifacts": {
+          "input_data": {
+            "artifactType": {
+              "schemaTitle": "system.Dataset",
+              "schemaVersion": "0.0.1"
+            }
+          }
+        }
+      }
+    },
+    "comp-deploy-model": {
+      "executorLabel": "exec-deploy-model",
+      "inputDefinitions": {
+        "artifacts": {
+          "ml_model": {
+            "artifactType": {
+              "schemaTitle": "system.Model",
+              "schemaVersion": "0.0.1"
+            }
+          }
+        },
+        "parameters": {
+          "model_name": {
+            "parameterType": "STRING"
+          },
+          "project": {
+            "parameterType": "STRING"
+          },
+          "region": {
+            "parameterType": "STRING"
+          },
+          "serving_container_image_uri": {
+            "parameterType": "STRING"
+          }
+        }
+      }
+    },
+    "comp-hyperparameters-training": {
+      "executorLabel": "exec-hyperparameters-training",
+      "inputDefinitions": {
+        "artifacts": {
+          "dataset_test": {
+            "artifactType": {
+              "schemaTitle": "system.Dataset",
+              "schemaVersion": "0.0.1"
+            }
+          },
+          "dataset_train": {
+            "artifactType": {
+              "schemaTitle": "system.Dataset",
+              "schemaVersion": "0.0.1"
+            }
+          }
+        },
+        "parameters": {
+          "max_evals": {
+            "parameterType": "NUMBER_INTEGER"
+          },
+          "target": {
+            "parameterType": "STRING"
+          }
+        }
+      },
+      "outputDefinitions": {
+        "artifacts": {
+          "metrics": {
+            "artifactType": {
+              "schemaTitle": "system.Metrics",
+              "schemaVersion": "0.0.1"
+            }
+          },
+          "ml_model": {
+            "artifactType": {
+              "schemaTitle": "system.Model",
+              "schemaVersion": "0.0.1"
+            }
+          },
+          "param_artifact": {
+            "artifactType": {
+              "schemaTitle": "system.Artifact",
+              "schemaVersion": "0.0.1"
+            }
+          }
+        }
+      }
+    },
+    "comp-preprocessing": {
+      "executorLabel": "exec-preprocessing",
+      "inputDefinitions": {
+        "artifacts": {
+          "train_df": {
+            "artifactType": {
+              "schemaTitle": "system.Dataset",
+              "schemaVersion": "0.0.1"
+            }
+          }
+        }
+      },
+      "outputDefinitions": {
+        "artifacts": {
+          "input_data_preprocessed": {
+            "artifactType": {
+              "schemaTitle": "system.Dataset",
+              "schemaVersion": "0.0.1"
+            }
+          }
+        }
+      }
+    },
+    "comp-train-test-data-split": {
+      "executorLabel": "exec-train-test-data-split",
+      "inputDefinitions": {
+        "artifacts": {
+          "dataset_in": {
+            "artifactType": {
+              "schemaTitle": "system.Dataset",
+              "schemaVersion": "0.0.1"
+            }
+          }
+        },
+        "parameters": {
+          "target_column": {
+            "parameterType": "STRING"
+          },
+          "test_size": {
+            "defaultValue": 0.2,
+            "isOptional": true,
+            "parameterType": "NUMBER_DOUBLE"
+          }
+        }
+      },
+      "outputDefinitions": {
+        "artifacts": {
+          "dataset_test": {
+            "artifactType": {
+              "schemaTitle": "system.Dataset",
+              "schemaVersion": "0.0.1"
+            }
+          },
+          "dataset_train": {
+            "artifactType": {
+              "schemaTitle": "system.Dataset",
+              "schemaVersion": "0.0.1"
+            }
+          }
+        }
+      }
+    }
+  },
+  "defaultPipelineRoot": "gs://demo_bucket_kfl/pipeline_root_demo",
+  "deploymentSpec": {
+    "executors": {
+      "exec-create-endpoint": {
+        "container": {
+          "args": [
+            "--executor_input",
+            "{{$}}",
+            "--function_to_execute",
+            "create_endpoint"
+          ],
+          "command": [
+            "sh",
+            "-c",
+            "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip || python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet --no-warn-script-location 'kfp==2.5.0' '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"$0\" \"$@\"\n",
+            "sh",
+            "-ec",
+            "program_path=$(mktemp -d)\n\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\n_KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
+            "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import *\n\ndef create_endpoint(\n    project: str,\n    region: str,\n    ml_model: Input[Model],\n    model_name: str,\n    serving_container_image_uri: str,\n):\n    from google.cloud import aiplatform\n    import logging\n\n    logging.basicConfig(\n        level=logging.INFO,\n        format=\"%(asctime)s - %(name)s - %(levelname)s - %(message)s\",\n    )\n    logger = logging.getLogger(__name__)\n\n\n    traffic_split = {\"0\": 100}\n    machine_type = \"n1-standard-4\"\n    min_replica_count = 1\n    max_replica_count = 1\n\n    endpoint = model.deploy(\n            deployed_model_display_name=model_name,\n            machine_type=machine_type,\n            traffic_split = traffic_split,\n            min_replica_count=min_replica_count,\n            max_replica_count=max_replica_count\n        )\n\n"
+          ],
+          "image": "asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow_pipelines/demo_model"
+        }
+      },
+      "exec-data-ingestion": {
+        "container": {
+          "args": [
+            "--executor_input",
+            "{{$}}",
+            "--function_to_execute",
+            "data_ingestion"
+          ],
+          "command": [
+            "sh",
+            "-c",
+            "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip || python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet --no-warn-script-location 'kfp==2.5.0' '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"$0\" \"$@\"\n",
+            "sh",
+            "-ec",
+            "program_path=$(mktemp -d)\n\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\n_KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
+            "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import *\n\ndef data_ingestion(input_data_path: str, input_data: Output[Dataset],):\n    import pandas as pd\n    from datetime import datetime, timedelta\n    from google.cloud import bigquery\n    import logging\n    df = pd.read_csv(input_data_path)\n    df.to_csv(input_data.path, index=False)\n\n"
+          ],
+          "image": "asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow_pipelines/demo_model"
+        }
+      },
+      "exec-deploy-model": {
+        "container": {
+          "args": [
+            "--executor_input",
+            "{{$}}",
+            "--function_to_execute",
+            "deploy_model"
+          ],
+          "command": [
+            "sh",
+            "-c",
+            "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip || python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet --no-warn-script-location 'kfp==2.5.0' '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"$0\" \"$@\"\n",
+            "sh",
+            "-ec",
+            "program_path=$(mktemp -d)\n\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\n_KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
+            "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import *\n\ndef deploy_model(\n    project: str,\n    region: str,\n    ml_model: Input[Model],\n    model_name: str,\n    serving_container_image_uri: str,\n):\n    from google.cloud import aiplatform\n    import logging\n\n    logging.basicConfig(\n        level=logging.INFO,\n        format=\"%(asctime)s - %(name)s - %(levelname)s - %(message)s\",\n    )\n    logger = logging.getLogger(__name__)\n\n    existing_models = aiplatform.Model.list(\n        filter=f\"display_name={model_name}\", project=project, location=region\n    )\n    if existing_models:\n        latest_model = existing_models[0]\n        logger.info(f\"Creating a new version for existing model: {latest_model.name}\")\n        model = aiplatform.Model.upload(\n            display_name=model_name,\n            artifact_uri=ml_model.path,\n            location='asia-south1',\n            serving_container_image_uri=serving_container_image_uri,\n            parent_model=latest_model.resource_name,\n        )\n    else:\n        logger.info(\"No existing model found. Creating a new model.\")\n        model = aiplatform.Model.upload(\n            display_name=model_name,\n            artifact_uri=ml_model.path,\n            location='asia-south1',\n            serving_container_image_uri=serving_container_image_uri,\n        )\n\n"
+          ],
+          "image": "asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow_pipelines/demo_model"
+        }
+      },
+      "exec-hyperparameters-training": {
+        "container": {
+          "args": [
+            "--executor_input",
+            "{{$}}",
+            "--function_to_execute",
+            "hyperparameters_training"
+          ],
+          "command": [
+            "sh",
+            "-c",
+            "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip || python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet --no-warn-script-location 'kfp==2.5.0' '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"$0\" \"$@\"\n",
+            "sh",
+            "-ec",
+            "program_path=$(mktemp -d)\n\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\n_KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
+            "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import *\n\ndef hyperparameters_training(\n    dataset_train: Input[Dataset],\n    dataset_test: Input[Dataset],\n    target: str,\n    max_evals: int,\n    metrics: Output[Metrics],\n    param_artifact: Output[Artifact],\n    ml_model: Output[Model],\n):\n    import pandas as pd\n    from sklearn.ensemble import RandomForestClassifier\n    from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score\n    from hyperopt import fmin, tpe, hp, Trials, STATUS_OK\n    import joblib\n    import os\n    import json\n    import logging\n\n\n    X_train = pd.read_csv(dataset_train.path)\n    X_test = pd.read_csv(dataset_test.path)\n\n    y_train = X_train[target]\n    y_test = X_test[target]\n    X_train = X_train.drop(target, axis=1)\n    X_test = X_test.drop(target, axis=1)\n\n    # Define the search space for Random Forest hyperparameters\n    space = {\n        'C' : hp.choice('C', [0.01,0.1, 1,10,100]), \n        'penalty' : hp.choice('penalty', ['l1', 'l2', 'elasticnet', 'none']), \n        'class_weight': hp.choice('class_weight', ['balanced']),\n        'solver' :  hp.choice('solver' , ['lbfgs','newton-cg','liblinear','sag','saga']),\n        'max_iter' :  hp.choice('max_iter', [100, 1000,2500, 5000]),\n    }\n    def objective(params):\n        rf = LogisticRegression(**params)\n        rf.fit(X_train, y_train)\n        y_pred = rf.predict(X_test)\n\n        accuracy = accuracy_score(y_test, y_pred)\n        precision = precision_score(y_test, y_pred, average='weighted')\n        recall = recall_score(y_test, y_pred, average='weighted')\n        f1 = f1_score(y_test, y_pred, average='weighted')\n\n        metrics.log_metric(\"accuracy\", accuracy)\n        metrics.log_metric(\"precision\", precision)\n        metrics.log_metric(\"recall\", recall)\n        metrics.log_metric(\"f1\", f1)\n\n        return {'loss': -accuracy, 'status': STATUS_OK, 'model': rf}\n    trials = Trials()\n\n    best = fmin(fn=objective, space=space, algo=tpe.suggest, max_evals=max_evals, trials=trials)\n\n    best_params = trials.best_trial['result']['model'].get_params()\n    best_model = trials.best_trial['result']['model']\n\n    # Save the best model\n    os.makedirs(ml_model.path, exist_ok=True)\n    joblib.dump(best_model, os.path.join(ml_model.path, 'model.joblib'))\n\n    # Save the best hyperparameters\n    with open(param_artifact.path, \"w\") as f:\n        json.dump(best_params, f)\n\n"
+          ],
+          "image": "asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow_pipelines/demo_model"
+        }
+      },
+      "exec-preprocessing": {
+        "container": {
+          "args": [
+            "--executor_input",
+            "{{$}}",
+            "--function_to_execute",
+            "preprocessing"
+          ],
+          "command": [
+            "sh",
+            "-c",
+            "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip || python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet --no-warn-script-location 'kfp==2.5.0' '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"$0\" \"$@\"\n",
+            "sh",
+            "-ec",
+            "program_path=$(mktemp -d)\n\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\n_KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
+            "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import *\n\ndef preprocessing(train_df: Input[Dataset], input_data_preprocessed: Output[Dataset]):\n    import pandas as pd\n    import numpy as np\n    from src.preprocess import get_preprocessing\n    import logging\n\n    df = pd.read_csv(train_df.path)\n    df = get_preprocessing(df)\n    df.to_csv(input_data_preprocessed.path, index=False)\n\n"
+          ],
+          "image": "asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow_pipelines/demo_model"
+        }
+      },
+      "exec-train-test-data-split": {
+        "container": {
+          "args": [
+            "--executor_input",
+            "{{$}}",
+            "--function_to_execute",
+            "train_test_data_split"
+          ],
+          "command": [
+            "sh",
+            "-c",
+            "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip || python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet --no-warn-script-location 'kfp==2.5.0' '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"$0\" \"$@\"\n",
+            "sh",
+            "-ec",
+            "program_path=$(mktemp -d)\n\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\n_KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
+            "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import *\n\ndef train_test_data_split(\n    dataset_in: Input[Dataset],\n    target_column: str,\n    dataset_train: Output[Dataset],\n    dataset_test: Output[Dataset],\n    test_size: float = 0.2,\n):\n    from src.train_test_splits import get_train_test_splits\n    import pandas as pd\n    import logging\n\n    data = pd.read_csv(dataset_in.path)\n    X_train, X_test = get_train_test_splits(\n        data, target_column, test_size\n    )\n    logger.info(\"Dataset train Shape: \", X_train.shape)\n    logger.info(\"Dataset test Shape: \", X_test.shape)\n    logger.info(f\"X_train columns: {list(X_train.columns)}\")\n    X_train.to_csv(dataset_train.path, index=False)\n    X_test.to_csv(dataset_test.path, index=False)\n\n"
+          ],
+          "image": "asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow_pipelines/demo_model"
+        }
+      }
+    }
+  },
+  "pipelineInfo": {
+    "name": "training-pipeline"
+  },
+  "root": {
+    "dag": {
+      "outputs": {
+        "artifacts": {
+          "hyperparameters-training-metrics": {
+            "artifactSelectors": [
+              {
+                "outputArtifactKey": "metrics",
+                "producerSubtask": "hyperparameters-training"
+              }
+            ]
+          }
+        }
+      },
+      "tasks": {
+        "create-endpoint": {
+          "cachingOptions": {},
+          "componentRef": {
+            "name": "comp-create-endpoint"
+          },
+          "dependentTasks": [
+            "hyperparameters-training"
+          ],
+          "inputs": {
+            "artifacts": {
+              "ml_model": {
+                "taskOutputArtifact": {
+                  "outputArtifactKey": "ml_model",
+                  "producerTask": "hyperparameters-training"
+                }
+              }
+            },
+            "parameters": {
+              "model_name": {
+                "componentInputParameter": "model_name"
+              },
+              "project": {
+                "componentInputParameter": "project_id"
+              },
+              "region": {
+                "componentInputParameter": "region"
+              },
+              "serving_container_image_uri": {
+                "componentInputParameter": "serving_container_image_uri"
+              }
+            }
+          },
+          "taskInfo": {
+            "name": "create-endpoint"
+          }
+        },
+        "data-ingestion": {
+          "cachingOptions": {},
+          "componentRef": {
+            "name": "comp-data-ingestion"
+          },
+          "inputs": {
+            "parameters": {
+              "input_data_path": {
+                "componentInputParameter": "input_data_path"
+              }
+            }
+          },
+          "taskInfo": {
+            "name": "data-ingestion"
+          }
+        },
+        "deploy-model": {
+          "cachingOptions": {},
+          "componentRef": {
+            "name": "comp-deploy-model"
+          },
+          "dependentTasks": [
+            "hyperparameters-training"
+          ],
+          "inputs": {
+            "artifacts": {
+              "ml_model": {
+                "taskOutputArtifact": {
+                  "outputArtifactKey": "ml_model",
+                  "producerTask": "hyperparameters-training"
+                }
+              }
+            },
+            "parameters": {
+              "model_name": {
+                "componentInputParameter": "model_name"
+              },
+              "project": {
+                "componentInputParameter": "project_id"
+              },
+              "region": {
+                "componentInputParameter": "region"
+              },
+              "serving_container_image_uri": {
+                "componentInputParameter": "serving_container_image_uri"
+              }
+            }
+          },
+          "taskInfo": {
+            "name": "deploy-model"
+          }
+        },
+        "hyperparameters-training": {
+          "cachingOptions": {},
+          "componentRef": {
+            "name": "comp-hyperparameters-training"
+          },
+          "dependentTasks": [
+            "train-test-data-split"
+          ],
+          "inputs": {
+            "artifacts": {
+              "dataset_test": {
+                "taskOutputArtifact": {
+                  "outputArtifactKey": "dataset_test",
+                  "producerTask": "train-test-data-split"
+                }
+              },
+              "dataset_train": {
+                "taskOutputArtifact": {
+                  "outputArtifactKey": "dataset_train",
+                  "producerTask": "train-test-data-split"
+                }
+              }
+            },
+            "parameters": {
+              "max_evals": {
+                "componentInputParameter": "max_evals"
+              },
+              "target": {
+                "componentInputParameter": "target"
+              }
+            }
+          },
+          "taskInfo": {
+            "name": "hyperparameters-training"
+          }
+        },
+        "preprocessing": {
+          "cachingOptions": {},
+          "componentRef": {
+            "name": "comp-preprocessing"
+          },
+          "dependentTasks": [
+            "data-ingestion"
+          ],
+          "inputs": {
+            "artifacts": {
+              "train_df": {
+                "taskOutputArtifact": {
+                  "outputArtifactKey": "input_data",
+                  "producerTask": "data-ingestion"
+                }
+              }
+            }
+          },
+          "taskInfo": {
+            "name": "preprocessing"
+          }
+        },
+        "train-test-data-split": {
+          "cachingOptions": {},
+          "componentRef": {
+            "name": "comp-train-test-data-split"
+          },
+          "dependentTasks": [
+            "preprocessing"
+          ],
+          "inputs": {
+            "artifacts": {
+              "dataset_in": {
+                "taskOutputArtifact": {
+                  "outputArtifactKey": "input_data_preprocessed",
+                  "producerTask": "preprocessing"
+                }
+              }
+            },
+            "parameters": {
+              "target_column": {
+                "runtimeValue": {
+                  "constant": "Classification"
+                }
+              },
+              "test_size": {
+                "runtimeValue": {
+                  "constant": 0.2
+                }
+              }
+            }
+          },
+          "taskInfo": {
+            "name": "train-test-data-split"
+          }
+        }
+      }
+    },
+    "inputDefinitions": {
+      "parameters": {
+        "input_data_path": {
+          "defaultValue": "gs://demo_bucket_kfl/clean_customer_data.csv",
+          "isOptional": true,
+          "parameterType": "STRING"
+        },
+        "max_evals": {
+          "defaultValue": 30.0,
+          "isOptional": true,
+          "parameterType": "NUMBER_INTEGER"
+        },
+        "model_name": {
+          "defaultValue": "demo_model",
+          "isOptional": true,
+          "parameterType": "STRING"
+        },
+        "project_id": {
+          "defaultValue": "solar-dialect-264808",
+          "isOptional": true,
+          "parameterType": "STRING"
+        },
+        "region": {
+          "defaultValue": "asia-south1",
+          "isOptional": true,
+          "parameterType": "STRING"
+        },
+        "serving_container_image_uri": {
+          "defaultValue": "asia-docker.pkg.dev/vertex-ai/prediction/sklearn-cpu.1-5:latest",
+          "isOptional": true,
+          "parameterType": "STRING"
+        },
+        "target": {
+          "defaultValue": "type",
+          "isOptional": true,
+          "parameterType": "STRING"
+        },
+        "use_hyperparameter_tuning": {
+          "defaultValue": true,
+          "isOptional": true,
+          "parameterType": "BOOLEAN"
+        }
+      }
+    },
+    "outputDefinitions": {
+      "artifacts": {
+        "hyperparameters-training-metrics": {
+          "artifactType": {
+            "schemaTitle": "system.Metrics",
+            "schemaVersion": "0.0.1"
+          }
+        }
+      }
+    }
+  },
+  "schemaVersion": "2.1.0",
+  "sdkVersion": "kfp-2.5.0"
+}
