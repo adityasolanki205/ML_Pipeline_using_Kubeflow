@@ -1,10 +1,4 @@
-FROM python:3.11
-
-RUN apt update
-RUN pip install virtualenv
-ENV VIRTUAL_ENV=/venv
-RUN virtualenv venv -p python3
-ENV PATH="VIRTUAL_ENV/bin:$PATH"
+FROM gcr.io/deeplearning-platform-release/base-cpu
 
 WORKDIR /
 COPY training_pipeline.py /

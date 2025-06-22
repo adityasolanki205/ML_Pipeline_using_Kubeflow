@@ -25,7 +25,7 @@ import os
 
 
 @component(
-    base_image="asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow_pipelines/demo_model"
+    base_image="asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow-pipelines/demo_model"
 )
 def data_ingestion(input_data_path: str, input_data: Output[Dataset],):
     import pandas as pd
@@ -40,16 +40,46 @@ def data_ingestion(input_data_path: str, input_data: Output[Dataset],):
 
 
 @component(
-    base_image="asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow_pipelines/demo_model"
+    base_image="asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow-pipelines/demo_model"
 )
+
 def preprocessing(train_df: Input[Dataset], input_data_preprocessed: Output[Dataset]):
     import pandas as pd
     import numpy as np
-    from src.preprocess import get_preprocessing
     import logging
+    import numpy as np
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    import warnings
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.preprocessing import MinMaxScaler, StandardScaler
+    from sklearn.preprocessing import LabelEncoder
+
+    def encode_columns(df, columns):
+        encoders = {}
+        for column in columns:
+            le = LabelEncoder()
+            df[column] = le.fit_transform(df[column])
+            encoders[column] = dict(zip(le.transform(le.classes_), le.classes_))
+        return df
+    def preprocess(df):
+        numeric_columns = df.describe().columns
+        df_log_transformed = df.copy()
+        df_log_transformed[numeric_columns] = df[numeric_columns].apply(lambda x: np.log(x + 1))
+        scaler = MinMaxScaler()
+        df_scaled_log_transformed = df_log_transformed.copy()
+        df_scaled_log_transformed[numeric_columns] = scaler.fit_transform(df_scaled_log_transformed[numeric_columns])
+        categorical_columns = [
+        'Existing account', 'Credit history', 'Purpose', 'Saving',
+        'Employment duration', 'Personal status', 'Debtors', 'Property',
+        'Installment plans', 'Housing', 'Job', 'Telephone', 'Foreign worker'
+        ]
+        df_scaled_log_transformed = encode_columns(df_scaled_log_transformed, categorical_columns)
+        return df_scaled_log_transformed
 
     df = pd.read_csv(train_df.path)
-    df = get_preprocessing(df)
+    df = preprocess(df)
     df.to_csv(input_data_preprocessed.path, index=False)
 
 
@@ -57,7 +87,7 @@ def preprocessing(train_df: Input[Dataset], input_data_preprocessed: Output[Data
 
 
 @component(
-    base_image="asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow_pipelines/demo_model"
+    base_image="asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow-pipelines/demo_model"
 )
 def train_test_data_split(
     dataset_in: Input[Dataset],
@@ -66,10 +96,32 @@ def train_test_data_split(
     dataset_test: Output[Dataset],
     test_size: float = 0.2,
 ):
-    from src.train_test_splits import get_train_test_splits
     import pandas as pd
     import logging
+    from sklearn.model_selection import train_test_split
+    from sklearn.preprocessing import StandardScaler
+    import pandas as pd
+    from sklearn.utils import shuffle
+    def get_train_test_splits(df, target_column, test_size_sample ):
+        df = shuffle(df)
+        x = df.drop(target_column, axis=1)
+        y = df[target_column]
 
+        X_train, X_test, y_train, y_test = train_test_split(x, y, test_size = test_size_sample)
+
+        X_train = pd.DataFrame(X_train)
+        y_train = pd.DataFrame(y_train)
+        X_test = pd.DataFrame(X_test)
+        y_test = pd.DataFrame(y_test)
+        X_train.reset_index(drop=True, inplace=True)
+        y_train.reset_index(drop=True, inplace=True)
+        X_test = X_test.reset_index(drop=True)
+        y_test = y_test.reset_index(drop=True)
+        X_train = pd.concat([X_train, y_train], axis=1)
+        X_test = pd.concat([X_test, y_test], axis=1)
+        X_train.columns = x.columns.to_list() + [target_column]
+        X_test.columns = x.columns.to_list() + [target_column]
+        return X_train, X_test
     data = pd.read_csv(dataset_in.path)
     X_train, X_test = get_train_test_splits(
         data, target_column, test_size
@@ -85,7 +137,7 @@ def train_test_data_split(
 
 
 @component(
-     base_image="asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow_pipelines/demo_model"
+     base_image="asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow-pipelines/demo_model"
 )
 def hyperparameters_training(
     dataset_train: Input[Dataset],
@@ -158,7 +210,7 @@ def hyperparameters_training(
 
 
 @component(
-    base_image="asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow_pipelines/demo_model"
+    base_image="asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow-pipelines/demo_model"
 )
 def deploy_model(
     project: str,
@@ -198,32 +250,22 @@ def deploy_model(
             serving_container_image_uri=serving_container_image_uri,
         )
 
-        
-
 
 # In[7]:
 
 
 @component(
-    base_image="asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow_pipelines/demo_model"
+    base_image="asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow-pipelines/demo_model"
 )
 def create_endpoint(
     project: str,
     region: str,
     ml_model: Input[Model],
     model_name: str,
-    serving_container_image_uri: str,
 ):
     from google.cloud import aiplatform
     import logging
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    )
-    logger = logging.getLogger(__name__)
-
-    
     traffic_split = {"0": 100}
     machine_type = "n1-standard-4"
     min_replica_count = 1
@@ -236,8 +278,6 @@ def create_endpoint(
             min_replica_count=min_replica_count,
             max_replica_count=max_replica_count
         )
-
-        
 
 
 # In[8]:
@@ -284,11 +324,10 @@ def pipeline(
         project=project_id, region=region,
         ml_model=hyperparam_tuning_op.outputs["ml_model"],
         model_name=model_name,
-        serving_container_image_uri=serving_container_image_uri
     )
     create_endpoint_op.set_caching_options(False)
     
-
+    create_endpoint_op.after(deploy_model_op)
 if __name__ == "__main__":
     compiler.Compiler().compile(pipeline_func=pipeline, package_path="training_pipeline.json")
 
