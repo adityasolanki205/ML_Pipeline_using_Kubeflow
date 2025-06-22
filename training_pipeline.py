@@ -126,9 +126,6 @@ def train_test_data_split(
     X_train, X_test = get_train_test_splits(
         data, target_column, test_size
     )
-    logger.info("Dataset train Shape: ", X_train.shape)
-    logger.info("Dataset test Shape: ", X_test.shape)
-    logger.info(f"X_train columns: {list(X_train.columns)}")
     X_train.to_csv(dataset_train.path, index=False)
     X_test.to_csv(dataset_test.path, index=False)
 
@@ -289,7 +286,7 @@ def pipeline(
     project_id: str = "solar-dialect-264808",
     region: str = "asia-south1",
     model_name: str = "demo_model",
-    target: str = "type",
+    target: str = "Classification",
     max_evals: int = 30,
     use_hyperparameter_tuning: bool = True,
     serving_container_image_uri: str = "asia-docker.pkg.dev/vertex-ai/prediction/sklearn-cpu.1-5:latest"
