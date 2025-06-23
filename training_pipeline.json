@@ -4,9 +4,9 @@
       "executorLabel": "exec-create-endpoint",
       "inputDefinitions": {
         "artifacts": {
-          "ml_model": {
+          "model_uri": {
             "artifactType": {
-              "schemaTitle": "system.Model",
+              "schemaTitle": "system.Artifact",
               "schemaVersion": "0.0.1"
             }
           }
@@ -19,9 +19,6 @@
             "parameterType": "STRING"
           },
           "region": {
-            "parameterType": "STRING"
-          },
-          "serving_container_image_uri": {
             "parameterType": "STRING"
           }
         }
@@ -70,6 +67,16 @@
           },
           "serving_container_image_uri": {
             "parameterType": "STRING"
+          }
+        }
+      },
+      "outputDefinitions": {
+        "artifacts": {
+          "model_uri": {
+            "artifactType": {
+              "schemaTitle": "system.Artifact",
+              "schemaVersion": "0.0.1"
+            }
           }
         }
       }
@@ -204,9 +211,9 @@
             "sh",
             "-ec",
             "program_path=$(mktemp -d)\n\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\n_KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
-            "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import *\n\ndef create_endpoint(\n    project: str,\n    region: str,\n    ml_model: Input[Model],\n    model_name: str,\n    serving_container_image_uri: str,\n):\n    from google.cloud import aiplatform\n    import logging\n\n    logging.basicConfig(\n        level=logging.INFO,\n        format=\"%(asctime)s - %(name)s - %(levelname)s - %(message)s\",\n    )\n    logger = logging.getLogger(__name__)\n\n\n    traffic_split = {\"0\": 100}\n    machine_type = \"n1-standard-4\"\n    min_replica_count = 1\n    max_replica_count = 1\n\n    endpoint = model.deploy(\n            deployed_model_display_name=model_name,\n            machine_type=machine_type,\n            traffic_split = traffic_split,\n            min_replica_count=min_replica_count,\n            max_replica_count=max_replica_count\n        )\n\n"
+            "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import *\n\ndef create_endpoint(\n    project: str,\n    region: str,\n    model_name: str,\n    model_uri: Input[Artifact],\n):\n    from google.cloud import aiplatform\n    import logging\n    import os\n    with open(os.path.join(model_uri.path, \"model_uri.txt\"), \"r\") as f:\n        model_resource_name = f.read()\n    model = aiplatform.Model(model_resource_name)\n    traffic_split = {\"0\": 100}\n    machine_type = \"n1-standard-4\"\n    min_replica_count = 1\n    max_replica_count = 1\n\n    endpoint = model.deploy(\n            deployed_model_display_name=model_name,\n            machine_type=machine_type,\n            traffic_split = traffic_split,\n            min_replica_count=min_replica_count,\n            max_replica_count=max_replica_count\n        )\n\n"
           ],
-          "image": "asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow_pipelines/demo_model"
+          "image": "asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow-pipelines/demo_model"
         }
       },
       "exec-data-ingestion": {
@@ -226,7 +233,7 @@
             "program_path=$(mktemp -d)\n\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\n_KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
             "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import *\n\ndef data_ingestion(input_data_path: str, input_data: Output[Dataset],):\n    import pandas as pd\n    from datetime import datetime, timedelta\n    from google.cloud import bigquery\n    import logging\n    df = pd.read_csv(input_data_path)\n    df.to_csv(input_data.path, index=False)\n\n"
           ],
-          "image": "asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow_pipelines/demo_model"
+          "image": "asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow-pipelines/demo_model"
         }
       },
       "exec-deploy-model": {
@@ -244,9 +251,9 @@
             "sh",
             "-ec",
             "program_path=$(mktemp -d)\n\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\n_KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
-            "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import *\n\ndef deploy_model(\n    project: str,\n    region: str,\n    ml_model: Input[Model],\n    model_name: str,\n    serving_container_image_uri: str,\n):\n    from google.cloud import aiplatform\n    import logging\n\n    logging.basicConfig(\n        level=logging.INFO,\n        format=\"%(asctime)s - %(name)s - %(levelname)s - %(message)s\",\n    )\n    logger = logging.getLogger(__name__)\n\n    existing_models = aiplatform.Model.list(\n        filter=f\"display_name={model_name}\", project=project, location=region\n    )\n    if existing_models:\n        latest_model = existing_models[0]\n        logger.info(f\"Creating a new version for existing model: {latest_model.name}\")\n        model = aiplatform.Model.upload(\n            display_name=model_name,\n            artifact_uri=ml_model.path,\n            location='asia-south1',\n            serving_container_image_uri=serving_container_image_uri,\n            parent_model=latest_model.resource_name,\n        )\n    else:\n        logger.info(\"No existing model found. Creating a new model.\")\n        model = aiplatform.Model.upload(\n            display_name=model_name,\n            artifact_uri=ml_model.path,\n            location='asia-south1',\n            serving_container_image_uri=serving_container_image_uri,\n        )\n\n"
+            "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import *\n\ndef deploy_model(\n    project: str,\n    region: str,\n    ml_model: Input[Model],\n    model_name: str,\n    serving_container_image_uri: str,\n    model_uri: Output[Artifact],\n):\n    from google.cloud import aiplatform\n    import logging\n    import os\n\n    logging.basicConfig(\n        level=logging.INFO,\n        format=\"%(asctime)s - %(name)s - %(levelname)s - %(message)s\",\n    )\n    logger = logging.getLogger(__name__)\n\n    existing_models = aiplatform.Model.list(\n        filter=f\"display_name={model_name}\", project=project, location=region\n    )\n    if existing_models:\n        latest_model = existing_models[0]\n        logger.info(f\"Creating a new version for existing model: {latest_model.name}\")\n        model = aiplatform.Model.upload(\n            display_name=model_name,\n            artifact_uri=ml_model.path,\n            location='asia-south1',\n            serving_container_image_uri=serving_container_image_uri,\n            parent_model=latest_model.resource_name,\n        )\n    else:\n        logger.info(\"No existing model found. Creating a new model.\")\n        model = aiplatform.Model.upload(\n            display_name=model_name,\n            artifact_uri=ml_model.path,\n            location='asia-south1',\n            serving_container_image_uri=serving_container_image_uri,\n        )\n    os.makedirs(model_uri.path, exist_ok=True)\n    with open(os.path.join(model_uri.path, \"model_uri.txt\"), \"w\") as f:\n        f.write(model.resource_name)\n\n"
           ],
-          "image": "asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow_pipelines/demo_model"
+          "image": "asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow-pipelines/demo_model"
         }
       },
       "exec-hyperparameters-training": {
@@ -264,9 +271,9 @@
             "sh",
             "-ec",
             "program_path=$(mktemp -d)\n\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\n_KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
-            "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import *\n\ndef hyperparameters_training(\n    dataset_train: Input[Dataset],\n    dataset_test: Input[Dataset],\n    target: str,\n    max_evals: int,\n    metrics: Output[Metrics],\n    param_artifact: Output[Artifact],\n    ml_model: Output[Model],\n):\n    import pandas as pd\n    from sklearn.ensemble import RandomForestClassifier\n    from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score\n    from hyperopt import fmin, tpe, hp, Trials, STATUS_OK\n    import joblib\n    import os\n    import json\n    import logging\n\n\n    X_train = pd.read_csv(dataset_train.path)\n    X_test = pd.read_csv(dataset_test.path)\n\n    y_train = X_train[target]\n    y_test = X_test[target]\n    X_train = X_train.drop(target, axis=1)\n    X_test = X_test.drop(target, axis=1)\n\n    # Define the search space for Random Forest hyperparameters\n    space = {\n        'C' : hp.choice('C', [0.01,0.1, 1,10,100]), \n        'penalty' : hp.choice('penalty', ['l1', 'l2', 'elasticnet', 'none']), \n        'class_weight': hp.choice('class_weight', ['balanced']),\n        'solver' :  hp.choice('solver' , ['lbfgs','newton-cg','liblinear','sag','saga']),\n        'max_iter' :  hp.choice('max_iter', [100, 1000,2500, 5000]),\n    }\n    def objective(params):\n        rf = LogisticRegression(**params)\n        rf.fit(X_train, y_train)\n        y_pred = rf.predict(X_test)\n\n        accuracy = accuracy_score(y_test, y_pred)\n        precision = precision_score(y_test, y_pred, average='weighted')\n        recall = recall_score(y_test, y_pred, average='weighted')\n        f1 = f1_score(y_test, y_pred, average='weighted')\n\n        metrics.log_metric(\"accuracy\", accuracy)\n        metrics.log_metric(\"precision\", precision)\n        metrics.log_metric(\"recall\", recall)\n        metrics.log_metric(\"f1\", f1)\n\n        return {'loss': -accuracy, 'status': STATUS_OK, 'model': rf}\n    trials = Trials()\n\n    best = fmin(fn=objective, space=space, algo=tpe.suggest, max_evals=max_evals, trials=trials)\n\n    best_params = trials.best_trial['result']['model'].get_params()\n    best_model = trials.best_trial['result']['model']\n\n    # Save the best model\n    os.makedirs(ml_model.path, exist_ok=True)\n    joblib.dump(best_model, os.path.join(ml_model.path, 'model.joblib'))\n\n    # Save the best hyperparameters\n    with open(param_artifact.path, \"w\") as f:\n        json.dump(best_params, f)\n\n"
+            "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import *\n\ndef hyperparameters_training(\n    dataset_train: Input[Dataset],\n    dataset_test: Input[Dataset],\n    target: str,\n    max_evals: int,\n    metrics: Output[Metrics],\n    param_artifact: Output[Artifact],\n    ml_model: Output[Model],\n):\n    import pandas as pd\n    from sklearn.linear_model import LogisticRegression\n    from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score\n    from hyperopt import fmin, tpe, hp, Trials, STATUS_OK\n    import joblib\n    import os\n    import json\n    import logging\n\n\n    X_train = pd.read_csv(dataset_train.path)\n    X_test = pd.read_csv(dataset_test.path)\n\n    y_train = X_train[target]\n    y_test = X_test[target]\n    X_train = X_train.drop(target, axis=1)\n    X_test = X_test.drop(target, axis=1)\n\n    # Define the search space for Random Forest hyperparameters\n    # space = {\n    #     'C' : hp.choice('C', [0.01,0.1, 1,10,100]), \n    #     'penalty' : hp.choice('penalty', ['l1', 'l2', 'elasticnet']), \n    #     'class_weight': hp.choice('class_weight', ['balanced']),\n    #     'solver' :  hp.choice('solver' , ['lbfgs','newton-cg','liblinear','sag','saga']),\n    #     'max_iter' :  hp.choice('max_iter', [100, 1000,2500, 5000]),\n    # }\n    space = {\n        'C': hp.loguniform('C', -3, 3),  # log-uniform between ~0.05 to ~20\n        'penalty': hp.choice('penalty', ['l1', 'l2']),  # safer to exclude 'elasticnet' unless solver == 'saga'\n        'solver': hp.choice('solver', ['liblinear', 'saga']),  # only solvers that support l1\n        'class_weight': hp.choice('class_weight', [None, 'balanced']),\n        'max_iter': hp.choice('max_iter', [100, 1000,2500, 5000]),\n    }\n    def objective(params):\n        rf = LogisticRegression(**params)\n        rf.fit(X_train, y_train)\n        y_pred = rf.predict(X_test)\n\n        accuracy = accuracy_score(y_test, y_pred)\n        precision = precision_score(y_test, y_pred, average='weighted')\n        recall = recall_score(y_test, y_pred, average='weighted')\n        f1 = f1_score(y_test, y_pred, average='weighted')\n\n        metrics.log_metric(\"accuracy\", accuracy)\n        metrics.log_metric(\"precision\", precision)\n        metrics.log_metric(\"recall\", recall)\n        metrics.log_metric(\"f1\", f1)\n\n        return {'loss': -accuracy, 'status': STATUS_OK, 'model': rf}\n    trials = Trials()\n\n    best = fmin(fn=objective, space=space, algo=tpe.suggest, max_evals=max_evals, trials=trials)\n\n    best_params = trials.best_trial['result']['model'].get_params()\n    best_model = trials.best_trial['result']['model']\n\n    # Save the best model\n    os.makedirs(ml_model.path, exist_ok=True)\n    joblib.dump(best_model, os.path.join(ml_model.path, 'model.joblib'))\n\n    # Save the best hyperparameters\n    with open(param_artifact.path, \"w\") as f:\n        json.dump(best_params, f)\n\n"
           ],
-          "image": "asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow_pipelines/demo_model"
+          "image": "asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow-pipelines/demo_model"
         }
       },
       "exec-preprocessing": {
@@ -284,9 +291,9 @@
             "sh",
             "-ec",
             "program_path=$(mktemp -d)\n\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\n_KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
-            "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import *\n\ndef preprocessing(train_df: Input[Dataset], input_data_preprocessed: Output[Dataset]):\n    import pandas as pd\n    import numpy as np\n    from src.preprocess import get_preprocessing\n    import logging\n\n    df = pd.read_csv(train_df.path)\n    df = get_preprocessing(df)\n    df.to_csv(input_data_preprocessed.path, index=False)\n\n"
+            "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import *\n\ndef preprocessing(train_df: Input[Dataset], input_data_preprocessed: Output[Dataset]):\n    import pandas as pd\n    import numpy as np\n    import logging\n    import numpy as np\n    import pandas as pd\n    import matplotlib.pyplot as plt\n    import seaborn as sns\n    import warnings\n    from sklearn.preprocessing import StandardScaler\n    from sklearn.preprocessing import MinMaxScaler, StandardScaler\n    from sklearn.preprocessing import LabelEncoder\n\n    def encode_columns(df, columns):\n        encoders = {}\n        for column in columns:\n            le = LabelEncoder()\n            df[column] = le.fit_transform(df[column])\n            encoders[column] = dict(zip(le.transform(le.classes_), le.classes_))\n        return df\n    def preprocess(df):\n        numeric_columns = df.describe().columns\n        df_log_transformed = df.copy()\n        df_log_transformed[numeric_columns] = df[numeric_columns].apply(lambda x: np.log(x + 1))\n        scaler = MinMaxScaler()\n        df_scaled_log_transformed = df_log_transformed.copy()\n        df_scaled_log_transformed[numeric_columns] = scaler.fit_transform(df_scaled_log_transformed[numeric_columns])\n        categorical_columns = [\n        'Existing account', 'Credit history', 'Purpose', 'Saving',\n        'Employment duration', 'Personal status', 'Debtors', 'Property',\n        'Installment plans', 'Housing', 'Job', 'Telephone', 'Foreign worker'\n        ]\n        df_scaled_log_transformed = encode_columns(df_scaled_log_transformed, categorical_columns)\n        return df_scaled_log_transformed\n\n    df = pd.read_csv(train_df.path)\n    df = preprocess(df)\n    df.to_csv(input_data_preprocessed.path, index=False)\n\n"
           ],
-          "image": "asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow_pipelines/demo_model"
+          "image": "asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow-pipelines/demo_model"
         }
       },
       "exec-train-test-data-split": {
@@ -304,9 +311,9 @@
             "sh",
             "-ec",
             "program_path=$(mktemp -d)\n\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\n_KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
-            "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import *\n\ndef train_test_data_split(\n    dataset_in: Input[Dataset],\n    target_column: str,\n    dataset_train: Output[Dataset],\n    dataset_test: Output[Dataset],\n    test_size: float = 0.2,\n):\n    from src.train_test_splits import get_train_test_splits\n    import pandas as pd\n    import logging\n\n    data = pd.read_csv(dataset_in.path)\n    X_train, X_test = get_train_test_splits(\n        data, target_column, test_size\n    )\n    logger.info(\"Dataset train Shape: \", X_train.shape)\n    logger.info(\"Dataset test Shape: \", X_test.shape)\n    logger.info(f\"X_train columns: {list(X_train.columns)}\")\n    X_train.to_csv(dataset_train.path, index=False)\n    X_test.to_csv(dataset_test.path, index=False)\n\n"
+            "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import *\n\ndef train_test_data_split(\n    dataset_in: Input[Dataset],\n    target_column: str,\n    dataset_train: Output[Dataset],\n    dataset_test: Output[Dataset],\n    test_size: float = 0.2,\n):\n    import pandas as pd\n    import logging\n    from sklearn.model_selection import train_test_split\n    from sklearn.preprocessing import StandardScaler\n    import pandas as pd\n    from sklearn.utils import shuffle\n    def get_train_test_splits(df, target_column, test_size_sample ):\n        df = shuffle(df)\n        x = df.drop(target_column, axis=1)\n        y = df[target_column]\n\n        X_train, X_test, y_train, y_test = train_test_split(x, y, test_size = test_size_sample)\n\n        X_train = pd.DataFrame(X_train)\n        y_train = pd.DataFrame(y_train)\n        X_test = pd.DataFrame(X_test)\n        y_test = pd.DataFrame(y_test)\n        X_train.reset_index(drop=True, inplace=True)\n        y_train.reset_index(drop=True, inplace=True)\n        X_test = X_test.reset_index(drop=True)\n        y_test = y_test.reset_index(drop=True)\n        X_train = pd.concat([X_train, y_train], axis=1)\n        X_test = pd.concat([X_test, y_test], axis=1)\n        X_train.columns = x.columns.to_list() + [target_column]\n        X_test.columns = x.columns.to_list() + [target_column]\n        return X_train, X_test\n    data = pd.read_csv(dataset_in.path)\n    X_train, X_test = get_train_test_splits(\n        data, target_column, test_size\n    )\n    X_train.to_csv(dataset_train.path, index=False)\n    X_test.to_csv(dataset_test.path, index=False)\n\n"
           ],
-          "image": "asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow_pipelines/demo_model"
+          "image": "asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow-pipelines/demo_model"
         }
       }
     }
@@ -335,14 +342,14 @@
             "name": "comp-create-endpoint"
           },
           "dependentTasks": [
-            "hyperparameters-training"
+            "deploy-model"
           ],
           "inputs": {
             "artifacts": {
-              "ml_model": {
+              "model_uri": {
                 "taskOutputArtifact": {
-                  "outputArtifactKey": "ml_model",
-                  "producerTask": "hyperparameters-training"
+                  "outputArtifactKey": "model_uri",
+                  "producerTask": "deploy-model"
                 }
               }
             },
@@ -355,9 +362,6 @@
               },
               "region": {
                 "componentInputParameter": "region"
-              },
-              "serving_container_image_uri": {
-                "componentInputParameter": "serving_container_image_uri"
               }
             }
           },
@@ -544,7 +548,7 @@
           "parameterType": "STRING"
         },
         "target": {
-          "defaultValue": "type",
+          "defaultValue": "Classification",
           "isOptional": true,
           "parameterType": "STRING"
         },

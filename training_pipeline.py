@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
+# In[25]:
 
 
 import yaml
@@ -21,7 +21,7 @@ import google.cloud.aiplatform as aiplatform
 import os
 
 
-# In[2]:
+# In[26]:
 
 
 @component(
@@ -36,7 +36,7 @@ def data_ingestion(input_data_path: str, input_data: Output[Dataset],):
     df.to_csv(input_data.path, index=False)
 
 
-# In[3]:
+# In[27]:
 
 
 @component(
@@ -83,7 +83,7 @@ def preprocessing(train_df: Input[Dataset], input_data_preprocessed: Output[Data
     df.to_csv(input_data_preprocessed.path, index=False)
 
 
-# In[4]:
+# In[28]:
 
 
 @component(
@@ -130,7 +130,7 @@ def train_test_data_split(
     X_test.to_csv(dataset_test.path, index=False)
 
 
-# In[5]:
+# In[29]:
 
 
 @component(
@@ -146,7 +146,7 @@ def hyperparameters_training(
     ml_model: Output[Model],
 ):
     import pandas as pd
-    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.linear_model import LogisticRegression
     from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
     from hyperopt import fmin, tpe, hp, Trials, STATUS_OK
     import joblib
@@ -164,12 +164,19 @@ def hyperparameters_training(
     X_test = X_test.drop(target, axis=1)
 
     # Define the search space for Random Forest hyperparameters
+    # space = {
+    #     'C' : hp.choice('C', [0.01,0.1, 1,10,100]), 
+    #     'penalty' : hp.choice('penalty', ['l1', 'l2', 'elasticnet']), 
+    #     'class_weight': hp.choice('class_weight', ['balanced']),
+    #     'solver' :  hp.choice('solver' , ['lbfgs','newton-cg','liblinear','sag','saga']),
+    #     'max_iter' :  hp.choice('max_iter', [100, 1000,2500, 5000]),
+    # }
     space = {
-        'C' : hp.choice('C', [0.01,0.1, 1,10,100]), 
-        'penalty' : hp.choice('penalty', ['l1', 'l2', 'elasticnet', 'none']), 
-        'class_weight': hp.choice('class_weight', ['balanced']),
-        'solver' :  hp.choice('solver' , ['lbfgs','newton-cg','liblinear','sag','saga']),
-        'max_iter' :  hp.choice('max_iter', [100, 1000,2500, 5000]),
+        'C': hp.loguniform('C', -3, 3),  # log-uniform between ~0.05 to ~20
+        'penalty': hp.choice('penalty', ['l1', 'l2']),  # safer to exclude 'elasticnet' unless solver == 'saga'
+        'solver': hp.choice('solver', ['liblinear', 'saga']),  # only solvers that support l1
+        'class_weight': hp.choice('class_weight', [None, 'balanced']),
+        'max_iter': hp.choice('max_iter', [100, 1000,2500, 5000]),
     }
     def objective(params):
         rf = LogisticRegression(**params)
@@ -203,7 +210,7 @@ def hyperparameters_training(
         json.dump(best_params, f)
 
 
-# In[6]:
+# In[30]:
 
 
 @component(
@@ -215,9 +222,11 @@ def deploy_model(
     ml_model: Input[Model],
     model_name: str,
     serving_container_image_uri: str,
+    model_uri: Output[Artifact],
 ):
     from google.cloud import aiplatform
     import logging
+    import os
 
     logging.basicConfig(
         level=logging.INFO,
@@ -246,9 +255,12 @@ def deploy_model(
             location='asia-south1',
             serving_container_image_uri=serving_container_image_uri,
         )
+    os.makedirs(model_uri.path, exist_ok=True)
+    with open(os.path.join(model_uri.path, "model_uri.txt"), "w") as f:
+        f.write(model.resource_name)
 
 
-# In[7]:
+# In[31]:
 
 
 @component(
@@ -257,12 +269,15 @@ def deploy_model(
 def create_endpoint(
     project: str,
     region: str,
-    ml_model: Input[Model],
     model_name: str,
+    model_uri: Input[Artifact],
 ):
     from google.cloud import aiplatform
     import logging
-
+    import os
+    with open(os.path.join(model_uri.path, "model_uri.txt"), "r") as f:
+        model_resource_name = f.read()
+    model = aiplatform.Model(model_resource_name)
     traffic_split = {"0": 100}
     machine_type = "n1-standard-4"
     min_replica_count = 1
@@ -277,7 +292,7 @@ def create_endpoint(
         )
 
 
-# In[8]:
+# In[32]:
 
 
 @dsl.pipeline(name="Training Pipeline", pipeline_root="gs://demo_bucket_kfl/pipeline_root_demo")
@@ -319,12 +334,11 @@ def pipeline(
     deploy_model_op.set_caching_options(False)
     create_endpoint_op = create_endpoint(
         project=project_id, region=region,
-        ml_model=hyperparam_tuning_op.outputs["ml_model"],
         model_name=model_name,
+        model_uri = deploy_model_op.outputs["model_uri"]
     )
     create_endpoint_op.set_caching_options(False)
     
-    create_endpoint_op.after(deploy_model_op)
 if __name__ == "__main__":
     compiler.Compiler().compile(pipeline_func=pipeline, package_path="training_pipeline.json")
 
