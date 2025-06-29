@@ -1,8 +1,8 @@
 # ML Operations using Kubleflow
-This is one of the **ML Operations** Repository. Here we will try to learn basics of Machine learning model deploement using **Kubeflow**. We will learn step by step how to create a MlOps pipeline using [German Credit Risk](https://www.kaggle.com/uciml/german-credit). The complete process is divided into 8 parts:
+This is one of the **ML Operations** Repository. Here we will try to learn basics of Machine learning model deploement using **Kubeflow**. We will learn step by step how to create a MlOps pipeline using [German Credit Risk](https://www.kaggle.com/uciml/german-credit). The complete process is divided into 6 parts:
 
 1. **Create a Machine Learning Model**
-2. **Create a Kubeflow Pipeline**
+2. **Create a Artifact registry**
 3. **Create Docker Image**
 4. **Create Pipeline**
 
@@ -29,19 +29,21 @@ For the last few years, I have been part of a great learning curve wherein I hav
 ## Libraries/frameworks used
 
 <b>Built with</b>
-- [Apache Beam](https://beam.apache.org/documentation/programming-guide/)
 - [Anaconda](https://www.anaconda.com/)
 - [Python](https://www.python.org/)
-- [Google DataFlow](https://cloud.google.com/dataflow)
+- [Vertex AI](https://cloud.google.com/vertex-ai?hl=en)
 - [Google Cloud Storage](https://cloud.google.com/storage)
-- [Google Bigquery](https://cloud.google.com/bigquery)
-- [Google Pub/Sub](https://cloud.google.com/pubsub)
+- [Artifact Registry](https://cloud.google.com/artifact-registry/docs)
+- [Cloud Build](https://cloud.google.com/build/docs)
+- [Vertex AI Workbench](https://cloud.google.com/vertex-ai-notebooks?hl=en)
+- [Vertex AI Model Registry](https://cloud.google.com/vertex-ai/docs/model-registry/introduction)
+- [Vertex AI Online Prediction](https://cloud.google.com/vertex-ai/docs/predictions/get-predictions)
 
 ## Cloning Repository
 
 ```bash
     # clone this repo:
-    git clone https://github.com/adityasolanki205/ML-Streaming-pipeline-using-Dataflow.git
+    git clone https://github.com/adityasolanki205/ML_Pipeline_using_Kubeflow.git
 ```
 
 ## Pipeline Construction
@@ -54,140 +56,45 @@ Below are the steps to setup the enviroment and run the codes:
 
 ```bash
     # clone this repo:
-    git clone https://github.com/adityasolanki205/ML-Streaming-pipeline-using-Dataflow.git
+    git clone https://github.com/adityasolanki205/ML_Pipeline_using_Kubeflow.git
 ```
 
-3. **Generating Streaming Data**: We need to generate streaming data that can be published to Pub Sub. Then those messages will be picked to be processed by the pipeline. To generate data we will use **random()** library to create input messages. Using the generating_data.py we will be able to generate random data in the required format. This generated data will be published to Pub/Sub using publish_to_pubsub.py. Here we will use PublisherClient object, add the path to the topic using the topic_path method and call the publish_to_pubsub() function while passing the topic_path and data.
+3. **Create a Machine Learning Model**: Now we will create a model on the Local Machine. Process to create that model is present [here](https://github.com/adityasolanki205/German-Credit.git). This provides basic step to wrangle , preprocess and save the data. You can also refer this [notebook](https://github.com/adityasolanki205/ML_Pipeline_using_Kubeflow/blob/main/German%20Credit.ipynb). 
 
-```python
-    import random
 
-    LINE ="""   {Existing_account} 
-                {Duration_month} 
-                {Credit_history} 
-                {Purpose} 
-                {Credit_amount} 
-                .....
-                {Foreign_worker}"""
+4. **Create a Artifact Registry**: We will now create a Repository for our Docker Image to be stored. Process is provded below.
 
-    def generate_log():
-        existing_account = ['B11','A12','C14',
-                            'D11','E11','A14',
-                            'G12','F12','A11',
-                            'H11','I11',
-                            'J14','K14','L11',
-                            'A13'
-                           ]
-        Existing_account = random.choice(existing_account)
+5. **Createing the Docker Image**: After creating the repository we will create the docker Image for Kubeflow Components. This will Also install all the required libraries:
+
+   docker_build.sh
+```bash
+    FROM gcr.io/deeplearning-platform-release/base-cpu
+
+    WORKDIR /
+    COPY training_pipeline.py /
+    COPY requirements.txt /
+    COPY ./src/ /src
+    RUN pip install --upgrade pip && pip install -r requirements.txt
+```
+    requirements.txt
+```text
+    pandas
+    numpy
+    scikit-learn
+    joblib
+    Cython
+    hyperopt
+    kfp
+    db-dtypes
     
-        duration_month = []
-        for i  in range(6, 90 , 3):
-            duration_month.append(i)
-        Duration_month = random.choice(duration_month)
-        ....
-        Foreign_worker = ['A201',
-                        'A202']
-        Foreign_worker = random.choice(foreign_worker)
-        log_line = LINE.format(
-            Existing_account=Existing_account,
-            Duration_month=Duration_month,
-            Credit_history=Credit_history,
-            Purpose=Purpose,
-            ...
-            Foreign_worker=Foreign_worker
-        )
-
-        return log_line
-
+    # Google Cloud libraries
+    google-cloud-aiplatform
+    google-cloud-storage
+    google-cloud-pubsub
+    google-cloud-bigquery
+    google-cloud-bigquery-storage
+    googleapis-common-protos
 ```
-
-4. **Reading Data from Pub Sub**: Now we will start reading data from Pub sub to start the pipeline. The data is read using **beam.io.ReadFromPubSub()**. Here we will just read the input message by providing the TOPIC and the output is decoded which was encoded while generating the data. 
-
-```python
-    def run(argv=None, save_main_session=True):
-        parser = argparse.ArgumentParser()
-        parser.add_argument(
-        '--project',
-        dest='project',
-        help='Project used for this Pipeline')
-        known_args, pipeline_args = parser.parse_known_args(argv)
-        options = PipelineOptions(pipeline_args)
-        PROJECT_ID = known_args.project
-        TOPIC ="projects/trusty-field-283517/topics/german_credit_data"
-        with beam.Pipeline(options=PipelineOptions()) as p:
-            encoded_data = ( p 
-                             | 'Read data' >> beam.io.ReadFromPubSub(topic=TOPIC).with_output_types(bytes) 
-                           )
-                    data = ( encoded_data
-                             | 'Decode' >> beam.Map(lambda x: x.decode('utf-8') ) 
-                           ) 
-    if __name__ == '__main__':
-        run()
-``` 
-
-5. **Parsing the data**: After reading the input from Pub-Sub we will split the data using split(). Data is segregated into different columns to be used in further steps. We will **ParDo()** to create a split function.
-
-```python
-    class Split(beam.DoFn):
-        #This Function Splits the Dataset into a dictionary
-        def process(self, element): 
-            Existing_account,
-            Duration_month,
-            Credit_history,
-            Purpose,
-            Credit_amount,
-            Saving,
-            Employment_duration,
-            Installment_rate,
-            Personal_status,
-            Debtors,
-            Residential_Duration,
-            Property,
-            Age,
-            Installment_plans,
-            Housing,
-            Number_of_credits
-            Job,
-            Liable_People,
-            Telephone,
-            Foreign_worker= element.split(' ')
-        return [{
-            'Existing_account': int(Existing_account),
-            'Duration_month': float(Duration_month),
-            'Credit_history': int(Credit_history),
-            'Purpose': int(Purpose),
-            'Credit_amount': float(Credit_amount),
-            'Saving': int(Saving),
-            'Employment_duration':int(Employment_duration),
-            'Installment_rate': float(Installment_rate),
-            'Personal_status': int(Personal_status),
-            'Debtors': int(Debtors),
-            'Residential_Duration': float(Residential_Duration),
-            'Property': int(Property),
-            'Age': float(Age),
-            'Installment_plans':int(Installment_plans),
-            'Housing': int(Housing),
-            'Number_of_credits': float(Number_of_credits),
-            'Job': int(Job),
-            'Liable_People': float(Liable_People),
-            'Telephone': int(Telephone),
-            'Foreign_worker': int(Foreign_worker),
-        }]
-    def run(argv=None, save_main_session=True):
-        ...
-        with beam.Pipeline(options=PipelineOptions()) as p:
-            encoded_data = ( p 
-                             | 'Read data' >> beam.io.ReadFromPubSub(topic=TOPIC).with_output_types(bytes))
-                    data = ( encoded_data
-                             | 'Decode' >> beam.Map(lambda x: x.decode('utf-8')))  
-            parsed_data  = (  data 
-                             | 'Parsing Data' >> beam.ParDo(Split())
-                             | 'Writing output' >> beam.io.WriteToText(known_args.output)
-                           )
-
-    if __name__ == '__main__':
-        run()
-``` 
 
 6. **Performing Type Convertion**: After Filtering we will convert the datatype of numeric columns from String to Int or Float datatype. Here we will use **Map()** to apply the Convert_Datatype(). 
 
@@ -349,7 +256,7 @@ Below are the steps to setup the enviroment and run the codes:
         run()        
 ```
 
-## Tests
+## Implementation
 To test the code we need to do the following:
 
     1. Copy the repository in Cloud SDK using below command:
