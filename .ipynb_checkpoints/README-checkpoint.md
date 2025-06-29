@@ -9,13 +9,21 @@ This is one of the **ML Operations** Repository. Here we will try to learn basic
    4.a ***Ingest Data***
 
    4.b ***Preprocess Data***
+
+   4.c ***Split Data into Training and Testing Dataset***
+
+   4.d ***HyperParametering Tuning***
+
+   4.e ***Deploy Model to Model Registry***
+
+   4.f ***Create Endpoint for Online Prediction***
    
-6. **Predicting the customer segment**
-7. **Inserting Data in Bigquery**
+6. **Running the Pipeline**
+7. **Verifing the Artifacts**
 
 
 ## Motivation
-For the last two years, I have been part of a great learning curve wherein I have upskilled myself to move into a Machine Learning and Cloud Computing. This project was practice project for all the learnings I have had. This is first of the many more to come. 
+For the last few years, I have been part of a great learning curve wherein I have upskilled myself to move into a Machine Learning and Cloud Computing. This project was practice project for all the learnings I have had. This is first of the many more to come. 
  
 
 ## Libraries/frameworks used
