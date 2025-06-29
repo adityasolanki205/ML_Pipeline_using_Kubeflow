@@ -5,8 +5,11 @@ This is one of the **ML Operations** Repository. Here we will try to learn basic
 2. **Create a Kubeflow Pipeline**
 3. **Create Docker Image**
 4. **Create Pipeline**
+
    4.a ***Ingest Data***
+
    4.b ***Preprocess Data***
+   
 6. **Predicting the customer segment**
 7. **Inserting Data in Bigquery**
 
