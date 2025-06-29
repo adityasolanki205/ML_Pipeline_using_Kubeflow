@@ -99,7 +99,7 @@ googleapis-common-protos
 
 6. **Create Pipeline**: Now the real pipeline creating starts. Here will we will try to create pipeline components one by one.
 
-6.a ***Ingest Data*** : First step in the pipeline is Data ingestion. 
+- 6.a ***Ingest Data*** : First step in the pipeline is Data ingestion. 
 
 ```python
     import yaml
