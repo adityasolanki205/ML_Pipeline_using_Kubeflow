@@ -66,7 +66,7 @@ Below are the steps to setup the enviroment and run the codes:
 
 5. **Createing the Docker Image**: After creating the repository we will create the docker Image for Kubeflow Components. This will Also install all the required libraries:
 
-   docker_build.sh
+docker_build.sh
 ```bash
     FROM gcr.io/deeplearning-platform-release/base-cpu
 
@@ -76,7 +76,8 @@ Below are the steps to setup the enviroment and run the codes:
     COPY ./src/ /src
     RUN pip install --upgrade pip && pip install -r requirements.txt
 ```
-    requirements.txt
+
+requirements.txt
 ```text
     pandas
     numpy
