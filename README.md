@@ -68,81 +68,66 @@ Below are the steps to setup the enviroment and run the codes:
 
 docker_build.sh
 ```bash
-    FROM gcr.io/deeplearning-platform-release/base-cpu
+FROM gcr.io/deeplearning-platform-release/base-cpu
 
-    WORKDIR /
-    COPY training_pipeline.py /
-    COPY requirements.txt /
-    COPY ./src/ /src
-    RUN pip install --upgrade pip && pip install -r requirements.txt
+WORKDIR /
+COPY training_pipeline.py /
+COPY requirements.txt /
+COPY ./src/ /src
+RUN pip install --upgrade pip && pip install -r requirements.txt
 ```
 
 requirements.txt
 ```text
-    pandas
-    numpy
-    scikit-learn
-    joblib
-    Cython
-    hyperopt
-    kfp
-    db-dtypes
-    
-    # Google Cloud libraries
-    google-cloud-aiplatform
-    google-cloud-storage
-    google-cloud-pubsub
-    google-cloud-bigquery
-    google-cloud-bigquery-storage
-    googleapis-common-protos
+pandas
+numpy
+scikit-learn
+joblib
+Cython
+hyperopt
+kfp
+db-dtypes
+
+# Google Cloud libraries
+google-cloud-aiplatform
+google-cloud-storage
+google-cloud-pubsub
+google-cloud-bigquery
+google-cloud-bigquery-storage
+googleapis-common-protos
 ```
 
-6. **Performing Type Convertion**: After Filtering we will convert the datatype of numeric columns from String to Int or Float datatype. Here we will use **Map()** to apply the Convert_Datatype(). 
+6. **Create Pipeline**: Now the real pipeline creating starts. Here will we will try to create pipeline components one by one.
+
+6.a ***Ingest Data*** : First step in the pipeline is Data ingestion. 
 
 ```python
-    ... 
-    def Convert_Datatype(data):
-        #This will convert the datatype of columns from String to integers or Float values
-        data['Duration_month'] = float(data['Duration_month']) if 'Duration_month' in data else None
-        data['Credit_amount'] = float(data['Credit_amount']) if 'Credit_amount' in data else None
-        data['Installment_rate'] = float(data['Installment_rate']) if 'Installment_rate' in data else None
-        data['Residential_Duration'] = float(data['Residential_Duration']) if 'Residential_Duration' in data else None
-        data['Age'] = float(data['Age']) if 'Age' in data else None
-        data['Number_of_credits'] = float(data['Number_of_credits']) if 'Number_of_credits' in data else None
-        data['Liable_People'] = float(data['Liable_People']) if 'Liable_People' in data else None
-        data['Existing_account'] =  int(data['Existing_account']) if 'Existing_account' in data else None
-        data['Credit_history'] =  int(data['Credit_history']) if 'Credit_history' in data else None
-        data['Purpose'] =  int(data['Purpose']) if 'Purpose' in data else None
-        data['Saving'] =  int(data['Saving']) if 'Saving' in data else None
-        data['Employment_duration'] =  int(data['Employment_duration']) if 'Employment_duration' in data else None
-        data['Personal_status'] =  int(data['Personal_status']) if 'Personal_status' in data else None
-        data['Debtors'] =  int(data['Debtors']) if 'Debtors' in data else None
-        data['Property'] =  int(data['Property']) if 'Property' in data else None
-        data['Installment_plans'] =  int(data['Installment_plans']) if 'Installment_plans' in data else None
-        data['Housing'] =  int(data['Housing']) if 'Housing' in data else None
-        data['Job'] =  int(data['Job']) if 'Job' in data else None
-        data['Telephone'] =  int(data['Telephone']) if 'Telephone' in data else None
-        data['Foreign_worker'] =  int(data['Foreign_worker']) if 'Foreign_worker' in data else None
-        return data
-    ...
-    def run(argv=None, save_main_session=True):
-        ...
-        with beam.Pipeline(options=PipelineOptions()) as p:
-             encoded_data = ( p 
-                            | 'Read data' >> beam.io.ReadFromPubSub(topic=TOPIC).with_output_types(bytes) 
-                            )
-                    data =  ( encoded_data
-                            | 'Decode' >> beam.Map(lambda x: x.decode('utf-8') 
-                            ) 
-              parsed_data = ( data 
-                            | 'Parsing Data' >> beam.ParDo(Split())
-                            )
-           Converted_data = ( parsed_data
-                            | 'Convert Datatypes' >> beam.Map(Convert_Datatype)
-                            | 'Writing output' >> beam.io.WriteToText(known_args.output))
+    import yaml
+    from kfp import dsl
+    from kfp.dsl import (
+        component,
+        Metrics,
+        Dataset,
+        Input,
+        Model,
+        Artifact,
+        OutputPath,
+        Output,
+    )
+    from kfp import compiler
+    import google.cloud.aiplatform as aiplatform
+    import os
+    @component(
+        base_image="asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow-pipelines/demo_model"
+    )
+    def data_ingestion(input_data_path: str, input_data: Output[Dataset],):
+        import pandas as pd
+        from datetime import datetime, timedelta
+        from google.cloud import bigquery
+        import logging
+        df = pd.read_csv(input_data_path)
+        df.to_csv(input_data.path, index=False)
 
-    if __name__ == '__main__':
-        run()
 ```
 
 7. **Predicting Customer segments**: Now we will implement the machine learning model. If you wish to learn how this machine learning model was created, please visit this [repository](https://github.com/adityasolanki205/German-Credit). We will save this model using JobLib library. To load the sklearn model we will have to follow the steps mentioned below:
