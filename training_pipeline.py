@@ -162,15 +162,6 @@ def hyperparameters_training(
     y_test = X_test[target]
     X_train = X_train.drop(target, axis=1)
     X_test = X_test.drop(target, axis=1)
-
-    # Define the search space for Random Forest hyperparameters
-    # space = {
-    #     'C' : hp.choice('C', [0.01,0.1, 1,10,100]), 
-    #     'penalty' : hp.choice('penalty', ['l1', 'l2', 'elasticnet']), 
-    #     'class_weight': hp.choice('class_weight', ['balanced']),
-    #     'solver' :  hp.choice('solver' , ['lbfgs','newton-cg','liblinear','sag','saga']),
-    #     'max_iter' :  hp.choice('max_iter', [100, 1000,2500, 5000]),
-    # }
     space = {
         'C': hp.loguniform('C', -3, 3),  # log-uniform between ~0.05 to ~20
         'penalty': hp.choice('penalty', ['l1', 'l2']),  # safer to exclude 'elasticnet' unless solver == 'saga'
