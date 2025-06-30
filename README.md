@@ -17,9 +17,10 @@ This is one of the **ML Operations** Repository. Here we will try to learn basic
    4.e ***Deploy Model to Model Registry***
 
    4.f ***Create Endpoint for Online Prediction***
+
+   4.g ***Defining the pipeline***
    
-5. **Running the Pipeline**
-6. **Verifing the Artifacts**
+6. **Running the Pipeline**
 
 
 ## Motivation
@@ -240,7 +241,7 @@ Below are the steps to setup the enviroment and run the codes:
             X_train.to_csv(dataset_train.path, index=False)
             X_test.to_csv(dataset_test.path, index=False)
     ```
-    - ***HyperParametering Tuning***: Fourth step in the pipeline is perform hyperparameter tuning. Here we try to find the optimal settings for its parameters to improve model performance.
+    - ***HyperParametering Tuning***: Fourth step in the pipeline is perform hyperparameter tuning. Here we try to find the optimal settings for its parameters to improve model performance. We try to find best parameters for Logistic regression. 
 
     ```python
         @component(
@@ -311,167 +312,176 @@ Below are the steps to setup the enviroment and run the codes:
                 json.dump(best_params, f)
     ```
     
-7. **Predicting Customer segments**: Now we will implement the machine learning model. If you wish to learn how this machine learning model was created, please visit this [repository](https://github.com/adityasolanki205/German-Credit). We will save this model using JobLib library. To load the sklearn model we will have to follow the steps mentioned below:
-    - Download the Model from Google Storage bucket using download_blob method
+    - ***Deploy Model to Model Registry***: Fifth step in the pipeline is deploy the model to Model Registry. This will help us use the model for online prediction. Here we either deploy latest version of the model or a new model depending if the model is already existing. Here we have 6 arguments in the method, starting with project, region coming from input arguments, ml_model created in previous step, model_name to be deployed in, serving container image to be used to deploy the code, and model_uri to be used to create the Endpoint in next step.
+
+    ```python
+        @component(
+            base_image="asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow-pipelines/demo_model"
+        )
+        def deploy_model(
+            project: str,
+            region: str,
+            ml_model: Input[Model],
+            model_name: str,
+            serving_container_image_uri: str,
+            model_uri: Output[Artifact],
+        ):
+            from google.cloud import aiplatform
+            import logging
+            import os
+        
+            logging.basicConfig(
+                level=logging.INFO,
+                format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            )
+            logger = logging.getLogger(__name__)
+        
+            existing_models = aiplatform.Model.list(
+                filter=f"display_name={model_name}", project=project, location=region
+            )
+            if existing_models:
+                latest_model = existing_models[0]
+                logger.info(f"Creating a new version for existing model: {latest_model.name}")
+                model = aiplatform.Model.upload(
+                    display_name=model_name,
+                    artifact_uri=ml_model.path,
+                    location='asia-south1',
+                    serving_container_image_uri=serving_container_image_uri,
+                    parent_model=latest_model.resource_name,
+                )
+            else:
+                logger.info("No existing model found. Creating a new model.")
+                model = aiplatform.Model.upload(
+                    display_name=model_name,
+                    artifact_uri=ml_model.path,
+                    location='asia-south1',
+                    serving_container_image_uri=serving_container_image_uri,
+                )
+            os.makedirs(model_uri.path, exist_ok=True)
+            with open(os.path.join(model_uri.path, "model_uri.txt"), "w") as f:
+                f.write(model.resource_name)
+    ```
     
-    - Load the model using setup() method in Predict_data() class
+    - ***Create Endpoint for Online Prediction***: In the sixth step we simply create an endpoint to be used for online prediction. This method has project, region, model_name and model_uri as input arguments.
+
+    ```python
+        @component(
+            base_image="asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow-pipelines/demo_model"
+        )
+        def create_endpoint(
+            project: str,
+            region: str,
+            model_name: str,
+            model_uri: Input[Artifact],
+        ):
+            from google.cloud import aiplatform
+            import logging
+            import os
+            with open(os.path.join(model_uri.path, "model_uri.txt"), "r") as f:
+                model_resource_name = f.read()
+            model = aiplatform.Model(model_resource_name)
+            traffic_split = {"0": 100}
+            machine_type = "n1-standard-4"
+            min_replica_count = 1
+            max_replica_count = 1
+            
+            endpoint = model.deploy(
+                    deployed_model_display_name=model_name,
+                    machine_type=machine_type,
+                    traffic_split = traffic_split,
+                    min_replica_count=min_replica_count,
+                    max_replica_count=max_replica_count
+                )
+        
+    ```
     
-    - Predict Customer segments from the input data using Predict() method of sklearn
+    - ***Defining the pipeline***: At last we define the pipeline components.
+      
+    ```python
+        @dsl.pipeline(name="Training Pipeline", pipeline_root="gs://demo_bucket_kfl/pipeline_root_demo")
+        def pipeline(
+            input_data_path: str = "gs://demo_bucket_kfl/german_data.csv",
+            project_id: str = "solar-dialect-264808",
+            region: str = "asia-south1",
+            model_name: str = "demo_model",
+            target: str = "Classification",
+            max_evals: int = 30,
+            use_hyperparameter_tuning: bool = True,
+            serving_container_image_uri: str = "asia-docker.pkg.dev/vertex-ai/prediction/sklearn-cpu.1-5:latest"
+        ):
+            data_op = data_ingestion(
+                input_data_path=input_data_path)
+            data_op.set_caching_options(False)
+        
+            data_preprocess_op = preprocessing(train_df=data_op.outputs["input_data"])
+            data_preprocess_op.set_caching_options(False)
+            train_test_split_op = train_test_data_split(
+                dataset_in=data_preprocess_op.outputs["input_data_preprocessed"],
+                target_column="Classification",
+                test_size=0.2,
+            )
+            train_test_split_op.set_caching_options(False)
+            hyperparam_tuning_op = hyperparameters_training(
+                dataset_train=train_test_split_op.outputs["dataset_train"],
+                dataset_test=train_test_split_op.outputs["dataset_test"],
+                target=target,
+                max_evals=max_evals
+            )
+            hyperparam_tuning_op.set_caching_options(False)
+            deploy_model_op = deploy_model(
+                project=project_id, region=region,
+                ml_model=hyperparam_tuning_op.outputs["ml_model"],
+                model_name=model_name,
+                serving_container_image_uri=serving_container_image_uri
+            )
+            deploy_model_op.set_caching_options(False)
+            create_endpoint_op = create_endpoint(
+                project=project_id, region=region,
+                model_name=model_name,
+                model_uri = deploy_model_op.outputs["model_uri"]
+            )
+            create_endpoint_op.set_caching_options(False)
+            
+        if __name__ == "__main__":
+            compiler.Compiler().compile(pipeline_func=pipeline, package_path="training_pipeline.json")
+    ```
     
-    - Add Prediction column in the output
+7. **Running the Pipeline**: Now we simply have to run the pipeline. 
 
 ```python
-    ... 
-    def call_vertex_ai(data):
-    aiplatform.init(project='827249641444', location='asia-south1')
-    feature_order = ['Existing_account', 'Duration_month', 'Credit_history', 'Purpose',
-                 'Credit_amount', 'Saving', 'Employment_duration', 'Installment_rate',
-                 'Personal_status', 'Debtors', 'Residential_Duration', 'Property', 'Age',
-                 'Installment_plans', 'Housing', 'Number_of_credits', 'Job', 
-                 'Liable_People', 'Telephone', 'Foreign_worker']
-    endpoint = aiplatform.Endpoint(endpoint_name=f"projects/827249641444/locations/asia-south1/endpoints/6457541741091225600")
-    features = [data[feature] for feature in feature_order]
-    response = endpoint.predict(
-        instances=[features]
-    )
+    from google.cloud.aiplatform import PipelineJob
     
-    prediction = response.predictions[0]
-    data['Prediction'] = int(prediction)
-    return data
-    ...
-    def run(argv=None, save_main_session=True):
-        ...
-        with beam.Pipeline(options=PipelineOptions()) as p:
-            encoded_data   = ( p 
-                             | 'Read data' >> beam.io.ReadFromPubSub(topic=TOPIC).with_output_types(bytes))
-            data           = ( encoded_data
-                             | 'Decode' >> beam.Map(lambda x: x.decode('utf-8')) 
-            Parsed_data    = ( data 
-                             | 'Parsing Data' >> beam.ParDo(Split()))
-            Converted_data = ( Parsed_data
-                             | 'Convert Datatypes' >> beam.Map(Convert_Datatype))
-            Prediction     = ( Converted_data 
-                             | 'Predition' >> 'Get Inference' >> beam.Map(call_vertex_ai))
-            Output         = ( Prediction
-                             | 'Saving the output' >> beam.io.WriteToText(known_args.output))
-    if __name__ == '__main__':
-        run()
-```
-
-10. **Inserting Data in Bigquery**: Final step in the Pipeline it to insert the data in Bigquery. To do this we will use **beam.io.WriteToBigQuery()** which requires Project id and a Schema of the target table to save the data. 
-
-```python
-    import apache_beam as beam
-    from apache_beam.options.pipeline_options import PipelineOptions
-    import argparse
-    
-    SCHEMA = 
-    '
-        Existing_account:INTEGER,
-        Duration_month:FLOAT,
-        Credit_history:INTEGER,
-        Purpose:INTEGER,
-        Credit_amount:FLOAT,
-        Saving:INTEGER,
-        Employment_duration:INTEGER,
-        Installment_rate:FLOAT,
-        Personal_status:INTEGER,
-        Debtors:INTEGER,
-        Residential_Duration:FLOAT,
-        Property:INTEGER,
-        Age:FLOAT,
-        Installment_plans:INTEGER,
-        Housing:INTEGER,
-        Number_of_credits:FLOAT,
-        Job:INTEGER,
-        Liable_People:FLOAT,
-        Telephone:INTEGER,
-        Foreign_worker:INTEGER,
-        Prediction:INTEGER
-    '
-    ...
-    def run(argv=None, save_main_session=True):
-        ...
-        parser.add_argument(
-          '--project',
-          dest='project',
-          help='Project used for this Pipeline')
-        ...
-        PROJECT_ID = known_args.project
-        with beam.Pipeline(options=PipelineOptions()) as p:
-            encoded_data   = ( p 
-                             | 'Read data' >> beam.io.ReadFromPubSub(topic=TOPIC).with_output_types(bytes) 
-                             )
-            data           = ( encoded_data
-                             | 'Decode' >> beam.Map(lambda x: x.decode('utf-8') 
-                             ) 
-            Parsed_data    = ( data 
-                             | 'Parsing Data' >> beam.ParDo(Split()))
-            Converted_data = ( Parsed_data
-                             | 'Convert Datatypes' >> beam.Map(Convert_Datatype))
-
-             Prediction     = ( Converted_data 
-                             | 'Predition' >> 'Get Inference' >> beam.Map(call_vertex_ai))
-            output         = ( Prediction      
-                             | 'Writing to bigquery' >> beam.io.WriteToBigQuery(
-                               '{0}:GermanCredit.GermanCreditTable'.format(PROJECT_ID),
-                               schema=SCHEMA,
-                               write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND)
-                             )
-
-    if __name__ == '__main__':
-        run()        
+    pipeline_job = PipelineJob(
+        display_name="training_pipeline_job",
+        template_path="training_pipeline.json",
+        pipeline_root="gs://demo_bucket_kfl/pipeline_root_demo",
+        project="solar-dialect-264808",
+        location="asia-south1",
+        )
+    pipeline_job.run()
 ```
 
 ## Implementation
 To test the code we need to do the following:
 
     1. Copy the repository in Cloud SDK using below command:
-    git clone https://github.com/adityasolanki205/ML-Streaming-pipeline-using-Dataflow.git
+       git clone https://github.com/adityasolanki205/ML_Pipeline_using_Kubeflow.git
     
-    2. Create a Storage Bucket by the name 'streaming-pipeline-testing' in us-east1 
+    2. Create a Storage Bucket by the name 'demo_bucket_kfl' in asia-south1
     
-    3. Create 2 separate subfolders temp and stage in the bucket
+    3. Copy the data file in the cloud Bucket using the below command
+    cd ML_Pipeline_using_Kubeflow
+    gsutil cp german_data.csv gs://demo_bucket_kfl/
     
-    4. Copy the machine learning model file in the cloud Bucket using the below command
-    cd ML-Streaming-pipeline-using-Dataflow
-    gsutil cp Selected_Model.pkl gs://streaming-pipeline-testing/
+    4. Run the file training_pipeline.ipynb/ training_pipeline.py. This will craete a json file
     
-    5. Create a Dataset in us-east1 by the name GermanCredit
-    
-    6. Create a table in GermanCredit dataset by the name GermanCreditTable
-    
-    7. Create Pub Sub Topic by the name german_credit_data
-    
-    8. Install Apache Beam on the SDK using below command
-    sudo pip3 install apache_beam[gcp]
-    sudo pip3 install joblib
-    sudo pip3 install sklearn
-    
-    9. Run the command and see the magic happen:
-     python3 ml-streaming-pipeline.py   
-         --runner DataFlowRunner   
-         --project solar-dialect-264808   
-         --bucket_name test_german_data   
-         --temp_location gs://test_german_data/Batch/Temp   
-         --staging_location gs://test_german_data/Batch/Stage   
-         --region asia-south1   
-         --job_name ml-stream-analysis   
-         --input_subscription projects/solar-dialect-264808/subscriptions/german_credit_data-sub   
-         --input_topic projects/solar-dialect-264808/topics/german_credit_data   
-         --save_main_session True   
-         --setup_file ./setup.py   
-         --minNumWorkers 1   
-         --maxNumWorkers 4   
-         --streaming
+    5. Run the run_pipeline.ipynb file
      
-    10. Open one more tab in cloud SDK and run below command 
-    cd ML-Streaming-pipeline-using-Dataflow
-    python3 publish_to_pubsub.py
+    6. Verify of all the artifacts are created.
 
 ## Credits
 1. Akash Nimare's [README.md](https://gist.github.com/akashnimare/7b065c12d9750578de8e705fb4771d2f#file-readme-md)
-2. [Apache Beam](https://beam.apache.org/documentation/programming-guide/#triggers)
-3. [Building Data Processing Pipeline With Apache Beam, Dataflow & BigQuery](https://towardsdatascience.com/apache-beam-pipeline-for-cleaning-batch-data-using-cloud-dataflow-and-bigquery-f9272cd89eba)
-4. [Let’s Build a Streaming Data Pipeline](https://towardsdatascience.com/lets-build-a-streaming-data-pipeline-e873d671fc57)
-5. [Apache Beam + Scikit learn(sklearn)](https://medium.com/@niklas.sven.hansson/apache-beam-scikit-learn-19f8ad10d4d)
+2. [Building a Kubeflow Training Pipeline on Google Cloud: A Step-by-Step Guide](https://medium.com/@rajmudigonda893/building-a-kubeflow-training-pipeline-on-google-cloud-a-step-by-step-guide-761a6b0eb197)
+3. [Deploy ML Training Pipeline Using Kubeflow](https://medium.com/@kavinduhapuarachchi/deploy-ml-training-pipeline-using-kubeflow-19d52d22f44f)
+4. [A Beginner’s Guide to Kubeflow on Google Cloud Platform](https://medium.com/@vishwanath.prudhivi/a-beginners-guide-to-kubeflow-on-google-cloud-platform-5d02dbd2ec5e)
+5. [MLOps 101 with Kubeflow and Vertex AI](https://medium.com/google-cloud/mlops-101-with-kubeflow-and-vertex-ai-61f6f5489fa8)
