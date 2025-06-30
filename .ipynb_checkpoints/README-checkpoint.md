@@ -52,7 +52,7 @@ Below are the steps to setup the enviroment and run the codes:
 
 1. **Setup**: First we will have to setup free google cloud account which can be done [here](https://cloud.google.com/free). Then we need to Download the data from [German Credit Risk](https://www.kaggle.com/uciml/german-credit).
 
-2. **Creating a input data**: Now we will create a clean input data on the Local Machine. This provides basic step to wrangle , preprocess and save the data. You can also refer this [notebook](https://github.com/adityasolanki205/ML_Pipeline_using_Kubeflow/blob/main/German%20Credit.ipynb). This also provide a process to create model on local machine
+2. **Creating a input data**: Now we will create a input data on the Local Machine. This provides basic step to wrangle , preprocess and save the data. You can also refer this [notebook](https://github.com/adityasolanki205/ML_Pipeline_using_Kubeflow/blob/main/German%20Credit.ipynb). This also provide a process to create model on local machine
 
 3. **Creating a Vertex AI Workbench and Cloud Storage bucket**: Here will we will create workbench and S3 bucket to be used in the process.
 
@@ -65,7 +65,8 @@ Below are the steps to setup the enviroment and run the codes:
     ```
 
     - Goto to Storage Bucket
-    - Click on create new and create a bucket with default setting in asia-south1 with the name 'demo-bucket-kfl' 
+    - Click on create new and create a bucket with default setting in asia-south1 with the name 'demo-bucket-kfl'
+    - Copy the file using 'gsutil cp clean_customer_data.csv gs://demo_bucket_kfl/'
 
 4. **Creating a Artifact Registry**: We will now create a Repository for our Docker Image to be stored. Process is provded below.
 
@@ -114,41 +115,202 @@ Below are the steps to setup the enviroment and run the codes:
        bash docker_build.sh
     ```
 
+6. **Create Pipeline**: Now the real pipeline creating starts. Here will we will try to create pipeline components one by one. File to be used is training_pipeline.ipynb
 
+   - ***Ingest Data*** : First step in the pipeline is Data ingestion. Here we simply read the data german_data.csv from our bucket. This method expect 2 arguments, one is input_data_path coming from input arguments of the python job and second is the output_dataset path to copy file output path
 
-6. **Create Pipeline**: Now the real pipeline creating starts. Here will we will try to create pipeline components one by one.
+    ```python
+        import yaml
+        from kfp import dsl
+        from kfp.dsl import (
+            component,
+            Metrics,
+            Dataset,
+            Input,
+            Model,
+            Artifact,
+            OutputPath,
+            Output,
+        )
+        from kfp import compiler
+        import google.cloud.aiplatform as aiplatform
+        import os
+        @component(
+            base_image="asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow-pipelines/demo_model"
+        )
+        def data_ingestion(input_data_path: str, input_data: Output[Dataset],):
+            import pandas as pd
+            from datetime import datetime, timedelta
+            from google.cloud import bigquery
+            import logging
+            df = pd.read_csv(input_data_path)
+            df.to_csv(input_data.path, index=False)
+    ```
+    
+    - ***Preprocess Data***: Second step in the pipeline is preprocess the data. Here we simply clean the data provided in output of previous step. This method expect 2 arguments, one is training_df coming from previous output of the python job and second is the output_dataset path to copy preprocessed file. Here we first convert reduce skewness in the data using logarithmic transform. Then we perform MinMAxscaling. At the end we perform label encoding to categorical columns. Then we write output data to output path.  
 
-   - ***Ingest Data*** : First step in the pipeline is Data ingestion. 
+    ```python  
+        @component(
+            base_image="asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow-pipelines/demo_model"
+        )
+        
+        def preprocessing(train_df: Input[Dataset], input_data_preprocessed: Output[Dataset]):
+            import pandas as pd
+            import numpy as np
+            import logging
+            import numpy as np
+            import pandas as pd
+            import matplotlib.pyplot as plt
+            import seaborn as sns
+            import warnings
+            from sklearn.preprocessing import StandardScaler
+            from sklearn.preprocessing import MinMaxScaler, StandardScaler
+            from sklearn.preprocessing import LabelEncoder
+        
+            def encode_columns(df, columns):
+                encoders = {}
+                for column in columns:
+                    le = LabelEncoder()
+                    df[column] = le.fit_transform(df[column])
+                    encoders[column] = dict(zip(le.transform(le.classes_), le.classes_))
+                return df
+            def preprocess(df):
+                numeric_columns = df.describe().columns
+                df_log_transformed = df.copy()
+                df_log_transformed[numeric_columns] = df[numeric_columns].apply(lambda x: np.log(x + 1))
+                scaler = MinMaxScaler()
+                df_scaled_log_transformed = df_log_transformed.copy()
+                df_scaled_log_transformed[numeric_columns] = scaler.fit_transform(df_scaled_log_transformed[numeric_columns])
+                categorical_columns = [
+                'Existing account', 'Credit history', 'Purpose', 'Saving',
+                'Employment duration', 'Personal status', 'Debtors', 'Property',
+                'Installment plans', 'Housing', 'Job', 'Telephone', 'Foreign worker'
+                ]
+                df_scaled_log_transformed = encode_columns(df_scaled_log_transformed, categorical_columns)
+                return df_scaled_log_transformed
+        
+            df = pd.read_csv(train_df.path)
+            df = preprocess(df)
+            df.to_csv(input_data_preprocessed.path, index=False)
+    ```
+    
+    - ***Split Data into Training and Testing Dataset***: Third step in the pipeline is split data into training and test datasets. We split the datasets train and test and save them to output paths. This methods has 5 arguments, one for dataset input from previous steps, label, output train and test dataset paths and test size. 
+      
+    ```python
+        @component(
+            base_image="asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow-pipelines/demo_model"
+        )
+        def train_test_data_split(
+            dataset_in: Input[Dataset],
+            target_column: str,
+            dataset_train: Output[Dataset],
+            dataset_test: Output[Dataset],
+            test_size: float = 0.2,
+        ):
+            import pandas as pd
+            import logging
+            from sklearn.model_selection import train_test_split
+            from sklearn.preprocessing import StandardScaler
+            import pandas as pd
+            from sklearn.utils import shuffle
+            def get_train_test_splits(df, target_column, test_size_sample ):
+                df = shuffle(df)
+                x = df.drop(target_column, axis=1)
+                y = df[target_column]
+        
+                X_train, X_test, y_train, y_test = train_test_split(x, y, test_size = test_size_sample)
+        
+                X_train = pd.DataFrame(X_train)
+                y_train = pd.DataFrame(y_train)
+                X_test = pd.DataFrame(X_test)
+                y_test = pd.DataFrame(y_test)
+                X_train.reset_index(drop=True, inplace=True)
+                y_train.reset_index(drop=True, inplace=True)
+                X_test = X_test.reset_index(drop=True)
+                y_test = y_test.reset_index(drop=True)
+                X_train = pd.concat([X_train, y_train], axis=1)
+                X_test = pd.concat([X_test, y_test], axis=1)
+                X_train.columns = x.columns.to_list() + [target_column]
+                X_test.columns = x.columns.to_list() + [target_column]
+                return X_train, X_test
+            data = pd.read_csv(dataset_in.path)
+            X_train, X_test = get_train_test_splits(
+                data, target_column, test_size
+            )
+            X_train.to_csv(dataset_train.path, index=False)
+            X_test.to_csv(dataset_test.path, index=False)
+    ```
+    - ***HyperParametering Tuning***: Fourth step in the pipeline is perform hyperparameter tuning. Here we try to find the optimal settings for its parameters to improve model performance.
 
-```python
-    import yaml
-    from kfp import dsl
-    from kfp.dsl import (
-        component,
-        Metrics,
-        Dataset,
-        Input,
-        Model,
-        Artifact,
-        OutputPath,
-        Output,
-    )
-    from kfp import compiler
-    import google.cloud.aiplatform as aiplatform
-    import os
-    @component(
-        base_image="asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow-pipelines/demo_model"
-    )
-    def data_ingestion(input_data_path: str, input_data: Output[Dataset],):
-        import pandas as pd
-        from datetime import datetime, timedelta
-        from google.cloud import bigquery
-        import logging
-        df = pd.read_csv(input_data_path)
-        df.to_csv(input_data.path, index=False)
-
-```
-
+    ```python
+        @component(
+             base_image="asia-south1-docker.pkg.dev/solar-dialect-264808/kubeflow-pipelines/demo_model"
+        )
+        def hyperparameters_training(
+            dataset_train: Input[Dataset],
+            dataset_test: Input[Dataset],
+            target: str,
+            max_evals: int,
+            metrics: Output[Metrics],
+            param_artifact: Output[Artifact],
+            ml_model: Output[Model],
+        ):
+            import pandas as pd
+            from sklearn.linear_model import LogisticRegression
+            from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+            from hyperopt import fmin, tpe, hp, Trials, STATUS_OK
+            import joblib
+            import os
+            import json
+            import logging
+            
+        
+            X_train = pd.read_csv(dataset_train.path)
+            X_test = pd.read_csv(dataset_test.path)
+        
+            y_train = X_train[target]
+            y_test = X_test[target]
+            X_train = X_train.drop(target, axis=1)
+            X_test = X_test.drop(target, axis=1)
+            space = {
+                'C': hp.loguniform('C', -3, 3),  # log-uniform between ~0.05 to ~20
+                'penalty': hp.choice('penalty', ['l1', 'l2']),  # safer to exclude 'elasticnet' unless solver == 'saga'
+                'solver': hp.choice('solver', ['liblinear', 'saga']),  # only solvers that support l1
+                'class_weight': hp.choice('class_weight', [None, 'balanced']),
+                'max_iter': hp.choice('max_iter', [100, 1000,2500, 5000]),
+            }
+            def objective(params):
+                rf = LogisticRegression(**params)
+                rf.fit(X_train, y_train)
+                y_pred = rf.predict(X_test)
+        
+                accuracy = accuracy_score(y_test, y_pred)
+                precision = precision_score(y_test, y_pred, average='weighted')
+                recall = recall_score(y_test, y_pred, average='weighted')
+                f1 = f1_score(y_test, y_pred, average='weighted')
+        
+                metrics.log_metric("accuracy", accuracy)
+                metrics.log_metric("precision", precision)
+                metrics.log_metric("recall", recall)
+                metrics.log_metric("f1", f1)
+        
+                return {'loss': -accuracy, 'status': STATUS_OK, 'model': rf}
+            trials = Trials()
+            
+            best = fmin(fn=objective, space=space, algo=tpe.suggest, max_evals=max_evals, trials=trials)
+        
+            best_params = trials.best_trial['result']['model'].get_params()
+            best_model = trials.best_trial['result']['model']
+        
+            # Save the best model
+            os.makedirs(ml_model.path, exist_ok=True)
+            joblib.dump(best_model, os.path.join(ml_model.path, 'model.joblib'))
+        
+            # Save the best hyperparameters
+            with open(param_artifact.path, "w") as f:
+                json.dump(best_params, f)
+    ```
+    
 7. **Predicting Customer segments**: Now we will implement the machine learning model. If you wish to learn how this machine learning model was created, please visit this [repository](https://github.com/adityasolanki205/German-Credit). We will save this model using JobLib library. To load the sklearn model we will have to follow the steps mentioned below:
     - Download the Model from Google Storage bucket using download_blob method
     
