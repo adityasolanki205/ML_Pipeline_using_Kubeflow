@@ -1,7 +1,7 @@
 # ML Operations using Kubleflow
 This is one of the **ML Operations** Repository. Here we will try to learn basics of Machine learning model deploement using **Kubeflow**. We will learn step by step how to create a MlOps pipeline using [German Credit Risk](https://www.kaggle.com/uciml/german-credit). The complete process is divided into 6 parts:
 
-1. **Create a Machine Learning Model**
+1. **Create Vertex AI workbench and Storage Bucket**
 2. **Create a Artifact registry**
 3. **Create Docker Image**
 4. **Create Pipeline**
@@ -18,8 +18,8 @@ This is one of the **ML Operations** Repository. Here we will try to learn basic
 
    4.f ***Create Endpoint for Online Prediction***
    
-6. **Running the Pipeline**
-7. **Verifing the Artifacts**
+5. **Running the Pipeline**
+6. **Verifing the Artifacts**
 
 
 ## Motivation
@@ -52,54 +52,73 @@ Below are the steps to setup the enviroment and run the codes:
 
 1. **Setup**: First we will have to setup free google cloud account which can be done [here](https://cloud.google.com/free). Then we need to Download the data from [German Credit Risk](https://www.kaggle.com/uciml/german-credit).
 
-2. **Cloning the Repository to Cloud SDK**: We will have to copy the repository on Cloud SDK using below command:
+2. **Creating a input data**: Now we will create a clean input data on the Local Machine. This provides basic step to wrangle , preprocess and save the data. You can also refer this [notebook](https://github.com/adityasolanki205/ML_Pipeline_using_Kubeflow/blob/main/German%20Credit.ipynb). This also provide a process to create model on local machine
 
-```bash
-    # clone this repo:
-    git clone https://github.com/adityasolanki205/ML_Pipeline_using_Kubeflow.git
-```
+3. **Creating a Vertex AI Workbench and Cloud Storage bucket**: Here will we will create workbench and S3 bucket to be used in the process.
 
-3. **Create a Machine Learning Model**: Now we will create a model on the Local Machine. Process to create that model is present [here](https://github.com/adityasolanki205/German-Credit.git). This provides basic step to wrangle , preprocess and save the data. You can also refer this [notebook](https://github.com/adityasolanki205/ML_Pipeline_using_Kubeflow/blob/main/German%20Credit.ipynb). 
+    - Goto to Vertex AI workbench
+    - Select Instances, Click on Create New and create the instance in asia-south1 with default settings
+    - After the instance becomes active, click on Juptyter Labs. Open a terminal anr run the below command.
+    ```bash
+       git clone https://github.com/adityasolanki205/ML_Pipeline_using_Kubeflow.git
+       cd ML_Pipeline_using_Kubeflow
+    ```
+
+    - Goto to Storage Bucket
+    - Click on create new and create a bucket with default setting in asia-south1 with the name 'demo-bucket-kfl' 
+
+4. **Creating a Artifact Registry**: We will now create a Repository for our Docker Image to be stored. Process is provded below.
+
+    - Goto to Artifact registry.
+    - Click on create Repository, use default setting to create a Docker Repository with Delete artifact option in asia-south1 and the name
+      'kubeflow-pipelines'
+
+5. **Creating the Docker Image**: After creating the repository we will create the docker Image for Kubeflow Components. This will also install all the required libraries:
+
+   - To create this image we go back to workbench.
+   - Now we run the docker_build. This file contains all the commands to create the image. It also contains requirements.txt file to install all the dependancies.
+     
+    requirements.txt
+    ```text
+        pandas
+        numpy
+        scikit-learn
+        joblib
+        Cython
+        hyperopt
+        kfp
+        db-dtypes
+        
+        # Google Cloud libraries
+        google-cloud-aiplatform
+        google-cloud-storage
+        google-cloud-pubsub
+        google-cloud-bigquery
+        google-cloud-bigquery-storage
+        googleapis-common-protos
+    ```
+
+    docker_build.sh
+    ```bash
+        FROM gcr.io/deeplearning-platform-release/base-cpu
+        
+        WORKDIR /
+        COPY training_pipeline.py /
+        COPY requirements.txt /
+        COPY ./src/ /src
+        RUN pip install --upgrade pip && pip install -r requirements.txt
+    ```
+    - To create the image, we run the command below
+
+    ```bash
+       bash docker_build.sh
+    ```
 
 
-4. **Create a Artifact Registry**: We will now create a Repository for our Docker Image to be stored. Process is provded below.
-
-5. **Createing the Docker Image**: After creating the repository we will create the docker Image for Kubeflow Components. This will Also install all the required libraries:
-
-docker_build.sh
-```bash
-FROM gcr.io/deeplearning-platform-release/base-cpu
-
-WORKDIR /
-COPY training_pipeline.py /
-COPY requirements.txt /
-COPY ./src/ /src
-RUN pip install --upgrade pip && pip install -r requirements.txt
-```
-
-requirements.txt
-```text
-pandas
-numpy
-scikit-learn
-joblib
-Cython
-hyperopt
-kfp
-db-dtypes
-
-# Google Cloud libraries
-google-cloud-aiplatform
-google-cloud-storage
-google-cloud-pubsub
-google-cloud-bigquery
-google-cloud-bigquery-storage
-googleapis-common-protos
-```
 
 6. **Create Pipeline**: Now the real pipeline creating starts. Here will we will try to create pipeline components one by one.
 
-   6.a ***Ingest Data*** : First step in the pipeline is Data ingestion. 
+   - ***Ingest Data*** : First step in the pipeline is Data ingestion. 
 
 ```python
     import yaml
