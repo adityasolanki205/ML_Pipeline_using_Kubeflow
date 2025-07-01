@@ -518,7 +518,7 @@
     "inputDefinitions": {
       "parameters": {
         "input_data_path": {
-          "defaultValue": "gs://demo_bucket_kfl/clean_customer_data.csv",
+          "defaultValue": "gs://demo_bucket_kfl/german_data.csv",
           "isOptional": true,
           "parameterType": "STRING"
         },

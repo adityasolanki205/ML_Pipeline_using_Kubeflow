@@ -21,6 +21,7 @@ This is one of the **ML Operations** Repository. Here we will try to learn basic
    4.g ***Defining the pipeline***
    
 6. **Running the Pipeline**
+7. **Metadata Management**
 
 
 ## Motivation
@@ -460,6 +461,10 @@ Below are the steps to setup the enviroment and run the codes:
         )
     pipeline_job.run()
 ```
+
+8. **Metadata Management**: At last we simply verify the metadata of the pipeline. The output artifacts are provided in output artifacts folder. 
+
+
 
 ## Implementation
 To test the code we need to do the following:
