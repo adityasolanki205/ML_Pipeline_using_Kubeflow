@@ -40,6 +40,7 @@ For the last few years, I have been part of a great learning curve wherein I hav
 - [Vertex AI Workbench](https://cloud.google.com/vertex-ai-notebooks?hl=en)
 - [Vertex AI Model Registry](https://cloud.google.com/vertex-ai/docs/model-registry/introduction)
 - [Vertex AI Online Prediction](https://cloud.google.com/vertex-ai/docs/predictions/get-predictions)
+- [Vertex AI Metadata](https://cloud.google.com/vertex-ai/docs/ml-metadata/introduction)
 
 ## Cloning Repository
 
@@ -464,8 +465,6 @@ Below are the steps to setup the enviroment and run the codes:
 
 8. **Metadata Management**: At last we simply verify the metadata of the pipeline. The output artifacts are provided in output artifacts folder. 
 
-
-
 ## Implementation
 To test the code we need to do the following:
 
@@ -475,8 +474,8 @@ To test the code we need to do the following:
     2. Create a Storage Bucket by the name 'demo_bucket_kfl' in asia-south1
     
     3. Copy the data file in the cloud Bucket using the below command
-    cd ML_Pipeline_using_Kubeflow
-    gsutil cp german_data.csv gs://demo_bucket_kfl/
+        cd ML_Pipeline_using_Kubeflow
+        gsutil cp german_data.csv gs://demo_bucket_kfl/
     
     4. Run the file training_pipeline.ipynb/ training_pipeline.py. This will craete a json file
     
