@@ -79,6 +79,11 @@ https://github.com/user-attachments/assets/89739148-baa3-4d95-9371-b2bab4ae4ead
     - Click on create Repository, use default setting to create a Docker Repository with Delete artifact option in asia-south1 and the name
       'kubeflow-pipelines'
 
+
+https://github.com/user-attachments/assets/76903e65-c08c-46f9-b86b-34de96268290
+
+
+
 5. **Creating the Docker Image**: After creating the repository we will create the docker Image for Kubeflow Components. This will also install all the required libraries:
 
    - To create this image we go back to workbench.
