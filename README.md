@@ -71,6 +71,8 @@ Below are the steps to setup the enviroment and run the codes:
     - Click on create new and create a bucket with default setting in asia-south1 with the name 'demo-bucket-kfl'
     - Copy the file using 'gsutil cp clean_customer_data.csv gs://demo_bucket_kfl/'
 
+https://github.com/user-attachments/assets/89739148-baa3-4d95-9371-b2bab4ae4ead
+
 4. **Creating a Artifact Registry**: We will now create a Repository for our Docker Image to be stored. Process is provded below.
 
     - Goto to Artifact registry.
