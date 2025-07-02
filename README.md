@@ -1,4 +1,4 @@
-# ML Operations using Kubleflow
+# ML Operations using Kubeflow
 This is one of the **ML Operations** Repository. Here we will try to learn basics of Machine learning model deploement using **Kubeflow**. We will learn step by step how to create a MLOps pipeline using [German Credit Risk](https://www.kaggle.com/uciml/german-credit). The complete process is divided into multiple parts:
 
 1. **Create Vertex AI workbench and Storage Bucket**

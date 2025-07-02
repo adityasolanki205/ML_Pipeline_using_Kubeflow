@@ -1,4 +1,4 @@
-# ML Operations using Kubleflow
+# ML Operations using Kubeflow
 This is one of the **ML Operations** Repository. Here we will try to learn basics of Machine learning model deploement using **Kubeflow**. We will learn step by step how to create a MLOps pipeline using [German Credit Risk](https://www.kaggle.com/uciml/german-credit). The complete process is divided into multiple parts:
 
 1. **Create Vertex AI workbench and Storage Bucket**
@@ -475,16 +475,29 @@ https://github.com/user-attachments/assets/0ccded59-f2c7-4e1d-863b-c790e7eab21a
     pipeline_job.run()
 ```
 
+https://github.com/user-attachments/assets/fb8a7cd2-2bd5-4127-8540-391058a45f8e
+
+
 8. **Metadata Management**: At last we simply verify the metadata of the pipeline. The output artifacts are provided in output artifacts folder.
-9. **Delete Infrastructure (Optional)**: Please delete below mentioned services
+
+
+https://github.com/user-attachments/assets/944b2b5d-cf57-4817-bfa7-87f4496b55d6
+
+
+10. **Delete Infrastructure (Optional)**: Please delete below mentioned services
     
     - Workbench
     - Storage Bucket
+    - Delete Pipelines
     - Artifact Repository created in Artifact Registry
     - Undeploy the model from endpoint
     - Delete the endpoint
     - Delete model from model registry
     - Delete data from Metadata management
+
+
+https://github.com/user-attachments/assets/5b765fcd-16e9-42e8-a9cf-2baf134e9f07
+
 
 ## Implementation
 To test the code we need to do the following:
