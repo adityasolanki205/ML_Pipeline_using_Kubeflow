@@ -475,6 +475,9 @@ https://github.com/user-attachments/assets/0ccded59-f2c7-4e1d-863b-c790e7eab21a
     pipeline_job.run()
 ```
 
+https://github.com/user-attachments/assets/fb8a7cd2-2bd5-4127-8540-391058a45f8e
+
+
 8. **Metadata Management**: At last we simply verify the metadata of the pipeline. The output artifacts are provided in output artifacts folder.
 
 
