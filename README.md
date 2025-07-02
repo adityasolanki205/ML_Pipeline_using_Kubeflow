@@ -476,7 +476,12 @@ https://github.com/user-attachments/assets/0ccded59-f2c7-4e1d-863b-c790e7eab21a
 ```
 
 8. **Metadata Management**: At last we simply verify the metadata of the pipeline. The output artifacts are provided in output artifacts folder.
-9. **Delete Infrastructure (Optional)**: Please delete below mentioned services
+
+
+https://github.com/user-attachments/assets/944b2b5d-cf57-4817-bfa7-87f4496b55d6
+
+
+10. **Delete Infrastructure (Optional)**: Please delete below mentioned services
     
     - Workbench
     - Storage Bucket
