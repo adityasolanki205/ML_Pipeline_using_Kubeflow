@@ -487,6 +487,10 @@ https://github.com/user-attachments/assets/0ccded59-f2c7-4e1d-863b-c790e7eab21a
     - Delete model from model registry
     - Delete data from Metadata management
 
+
+https://github.com/user-attachments/assets/5b765fcd-16e9-42e8-a9cf-2baf134e9f07
+
+
 ## Implementation
 To test the code we need to do the following:
 
