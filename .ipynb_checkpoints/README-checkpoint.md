@@ -71,11 +71,18 @@ Below are the steps to setup the enviroment and run the codes:
     - Click on create new and create a bucket with default setting in asia-south1 with the name 'demo-bucket-kfl'
     - Copy the file using 'gsutil cp clean_customer_data.csv gs://demo_bucket_kfl/'
 
+https://github.com/user-attachments/assets/89739148-baa3-4d95-9371-b2bab4ae4ead
+
 4. **Creating a Artifact Registry**: We will now create a Repository for our Docker Image to be stored. Process is provded below.
 
     - Goto to Artifact registry.
-    - Click on create Repository, use default setting to create a Docker Repository with Delete artifact option in asia-south1 and the name
+    - Click on create Repository, use default setting to create a Docker Repository in asia-south1 and the name
       'kubeflow-pipelines'
+
+
+https://github.com/user-attachments/assets/76903e65-c08c-46f9-b86b-34de96268290
+
+
 
 5. **Creating the Docker Image**: After creating the repository we will create the docker Image for Kubeflow Components. This will also install all the required libraries:
 
@@ -117,6 +124,11 @@ Below are the steps to setup the enviroment and run the codes:
     ```bash
        bash docker_build.sh
     ```
+
+
+https://github.com/user-attachments/assets/0ccded59-f2c7-4e1d-863b-c790e7eab21a
+
+
 
 6. **Create Pipeline**: Now the real pipeline creating starts. Here will we will try to create pipeline components one by one. File to be used is training_pipeline.ipynb
 
@@ -463,7 +475,16 @@ Below are the steps to setup the enviroment and run the codes:
     pipeline_job.run()
 ```
 
-8. **Metadata Management**: At last we simply verify the metadata of the pipeline. The output artifacts are provided in output artifacts folder. 
+8. **Metadata Management**: At last we simply verify the metadata of the pipeline. The output artifacts are provided in output artifacts folder.
+9. **Delete Infrastructure (Optional)**: Please delete below mentioned services
+    
+    - Workbench
+    - Storage Bucket
+    - Artifact Repository created in Artifact Registry
+    - Undeploy the model from endpoint
+    - Delete the endpoint
+    - Delete model from model registry
+    - Delete data from Metadata management
 
 ## Implementation
 To test the code we need to do the following:

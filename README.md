@@ -76,7 +76,7 @@ https://github.com/user-attachments/assets/89739148-baa3-4d95-9371-b2bab4ae4ead
 4. **Creating a Artifact Registry**: We will now create a Repository for our Docker Image to be stored. Process is provded below.
 
     - Goto to Artifact registry.
-    - Click on create Repository, use default setting to create a Docker Repository with Delete artifact option in asia-south1 and the name
+    - Click on create Repository, use default setting to create a Docker Repository in asia-south1 and the name
       'kubeflow-pipelines'
 
 
@@ -475,7 +475,17 @@ https://github.com/user-attachments/assets/0ccded59-f2c7-4e1d-863b-c790e7eab21a
     pipeline_job.run()
 ```
 
-8. **Metadata Management**: At last we simply verify the metadata of the pipeline. The output artifacts are provided in output artifacts folder. 
+8. **Metadata Management**: At last we simply verify the metadata of the pipeline. The output artifacts are provided in output artifacts folder.
+9. **Delete Infrastructure (Optional)**: Please delete below mentioned services
+    
+    - Workbench
+    - Storage Bucket
+    - Delete Pipelines
+    - Artifact Repository created in Artifact Registry
+    - Undeploy the model from endpoint
+    - Delete the endpoint
+    - Delete model from model registry
+    - Delete data from Metadata management
 
 ## Implementation
 To test the code we need to do the following:
