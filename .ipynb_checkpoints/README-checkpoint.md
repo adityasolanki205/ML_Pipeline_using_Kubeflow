@@ -511,7 +511,7 @@ To test the code we need to do the following:
         cd ML_Pipeline_using_Kubeflow
         gsutil cp german_data.csv gs://demo_bucket_kfl/
     
-    4. Run the file training_pipeline.ipynb/ training_pipeline.py. This will craete a json file
+    4. Run the file training_pipeline.ipynb/training_pipeline.py. This will create a json file
     
     5. Run the run_pipeline.ipynb file
      
